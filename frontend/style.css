@@ -1,0 +1,19 @@
+/* FLEXORA - Modular CSS Structure */
+
+/* Base styles and variables */
+@import url('css/base.css');
+
+/* Components */
+@import url('css/components/navigation.css');
+@import url('css/components/hero.css');
+@import url('css/components/sidebar.css');
+@import url('css/components/cards.css');
+@import url('css/components/modal.css');
+@import url('css/components/footer.css');
+
+/* Pages */
+@import url('css/pages/trending.css');
+@import url('css/pages/categories.css');
+
+/* Responsive styles */
+@import url('css/responsive.css');

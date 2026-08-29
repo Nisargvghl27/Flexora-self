@@ -1,0 +1,731 @@
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import Navigation from '../components/Navigation';
+import Footer from '../components/Footer';
+import PageHero from '../components/PageHero';
+import { ArrowLeft, Share2, Sparkles, ShoppingBag, Star} from 'lucide-react';
+import { toast } from "sonner";
+import { lookbookApi, productApi, Product, Lookbook as LookbookType, LookbookItem as LookbookItemType } from '../services/lookbookApi';
+import { useAuth } from '../App';
+import { getStorageData, setStorageData, STORAGE_KEYS } from '../lib/storage';
+import TrendSwipePopup from '../components/TrendSwipePopup';
+import { ChevronLeft, ChevronRight, Eye, Heart } from 'lucide-react';
+
+interface LookbookItem {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  originalPrice?: number;
+  image: string;
+  designer: string;
+  rating: number;
+  reviews: number;
+  featured?: boolean;
+  trending?: boolean;
+  sizes?: string[];
+  colors?: string[];
+}
+
+interface PersonaData {
+  title: string;
+  description: string;
+  color: string;
+  recommendations: string[];
+  items: LookbookItem[];
+  trendingStyles: string[];
+}
+
+// Function to get products that match each style persona
+const getProductsForPersona = async (persona: string): Promise<Product[]> => {
+  try {
+    return await productApi.getProductsForStyle(persona);
+  } catch (error) {
+    console.error('Error fetching products for persona:', error);
+    return [];
+  }
+};
+
+// Convert Product to LookbookItem
+const convertProductToLookbookItem = (product: Product): LookbookItem => ({
+  id: product.id,
+  title: product.name,
+  description: product.description,
+  category: product.category || 'General',
+  price: product.price,
+  originalPrice: undefined, // Backend doesn't have originalPrice
+  image: product.image_url || product.image || '/placeholder.jpg',
+  designer: product.brand || 'Unknown Designer',
+  rating: 4.5, // Default rating since backend doesn't have this
+  reviews: Math.floor(Math.random() * 100) + 10, // Random reviews count
+  featured: product.stock_quantity > 20, // Use stock as featured indicator
+  trending: product.stock_quantity > 20,
+  sizes: ['XS', 'S', 'M', 'L', 'XL'], // Default sizes
+  colors: ['Black', 'White', 'Gray'] // Default colors
+});
+
+// Static persona metadata (items will be loaded dynamically)
+const getPersonaMetadata = (persona: string): Omit<PersonaData, 'items'> => {
+  const metadata: Record<string, Omit<PersonaData, 'items'>> = {
+    'minimalist-style': {
+      title: "Minimalist Style Lookbook",
+      description: "Clean lines, quality over quantity, and timeless pieces that speak to your sophisticated aesthetic.",
+      color: "from-gray-400 to-gray-600",
+      recommendations: [
+        "Invest in high-quality basics",
+        "Stick to a neutral color palette",
+        "Focus on clean silhouettes",
+        "Choose versatile pieces that mix and match"
+      ],
+      trendingStyles: ["Capsule Wardrobe", "Neutral Tones", "Clean Lines", "Quality Basics"]
+    },
+    'bohemian-style': {
+      title: "Bohemian Style Lookbook",
+      description: "Free-spirited and artistic pieces that celebrate your creative expression and love for eclectic style.",
+      color: "from-amber-400 to-orange-500",
+      recommendations: [
+        "Mix patterns and textures freely",
+        "Layer jewelry and accessories",
+        "Choose flowing, comfortable fabrics",
+        "Embrace earthy and warm tones"
+      ],
+      trendingStyles: ["Free Spirit", "Artistic Expression", "Layered Looks", "Earthy Tones"]
+    },
+    'vintage-style': {
+      title: "Vintage Style Lookbook",
+      description: "Timeless elegance and classic sophistication that reflects your appreciation for fashion history.",
+      color: "from-rose-400 to-pink-500",
+      recommendations: [
+        "Look for quality vintage pieces",
+        "Embrace classic silhouettes",
+        "Choose sophisticated accessories",
+        "Mix vintage with modern touches"
+      ],
+      trendingStyles: ["Classic Elegance", "Timeless Fashion", "Sophisticated Look", "Retro Vibes"]
+    },
+    'casual-style': {
+      title: "Casual Style Lookbook",
+      description: "Comfortable and versatile pieces that maintain style while prioritizing ease and practicality.",
+      color: "from-blue-400 to-indigo-500",
+      recommendations: [
+        "Choose comfortable, breathable fabrics",
+        "Focus on versatile, mix-and-match pieces",
+        "Keep accessories simple and practical",
+        "Prioritize comfort without sacrificing style"
+      ],
+      trendingStyles: ["Weekend Casual", "Comfort First", "Versatile Pieces", "Easy Style"]
+    },
+    'streetwear-style': {
+      title: "Streetwear Style Lookbook",
+      description: "Urban and edgy pieces that reflect your bold, contemporary fashion sense and love for street culture.",
+      color: "from-purple-400 to-pink-500",
+      recommendations: [
+        "Mix high and low fashion",
+        "Embrace bold graphics and logos",
+        "Layer pieces for depth",
+        "Choose comfortable, statement pieces"
+      ],
+      trendingStyles: ["Urban Edge", "Bold Graphics", "Layered Street Style", "Contemporary Cool"]
+    },
+    'formal-style': {
+      title: "Formal Style Lookbook",
+      description: "Sophisticated and elegant pieces that showcase your refined taste and professional demeanor.",
+      color: "from-emerald-400 to-teal-500",
+      recommendations: [
+        "Invest in quality formal pieces",
+        "Choose sophisticated accessories",
+        "Focus on tailored fits",
+        "Maintain a polished appearance"
+      ],
+      trendingStyles: ["Sophisticated Elegance", "Professional Polish", "Refined Taste", "Timeless Luxury"]
+    }
+  };
+  
+  return metadata[persona] || metadata['minimalist-style'];
+};
+
+// Add a local type for swipe products
+interface SwipeProduct {
+  id: string;
+  name: string;
+  images: string[];
+  tags: string[];
+}
+
+function getSwipeResults(persona: string): { liked: SwipeProduct[]; skipped: SwipeProduct[] } {
+  try {
+    const raw = localStorage.getItem(`flexora-swipe-results-${persona}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { liked: [], skipped: [] };
+}
+
+function setSwipeResults(persona: string, liked: SwipeProduct[], skipped: SwipeProduct[]) {
+  try {
+    localStorage.setItem(`flexora-swipe-results-${persona}`, JSON.stringify({ liked, skipped }));
+  } catch {}
+}
+
+// Carousel for liked products
+const LikedCarousel = ({ items }: { items: SwipeProduct[] }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollBy = 320;
+  const handleScroll = (dir: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const newScroll = dir === 'left' ? scrollRef.current.scrollLeft - scrollBy : scrollRef.current.scrollLeft + scrollBy;
+    scrollRef.current.scrollTo({ left: newScroll, behavior: 'smooth' });
+  };
+  return (
+    <div className="relative">
+      <button
+        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-background/80 rounded-full p-2 shadow hover:bg-accent transition disabled:opacity-30"
+        onClick={() => handleScroll('left')}
+        disabled={!scrollRef.current || scrollRef.current.scrollLeft === 0}
+        aria-label="Scroll left"
+        style={{ display: items.length > 2 ? 'block' : 'none' }}
+      >
+        <ChevronLeft className="w-6 h-6" />
+      </button>
+      <div
+        ref={scrollRef}
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-thin scrollbar-thumb-accent/40 scrollbar-track-transparent"
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        {items.map((item, index) => (
+          <Link
+            to={`/products/${item.id}`}
+            key={item.id}
+            className="min-w-[280px] max-w-[320px] snap-center bg-card rounded-xl border border-border overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 animate-fade-in group flex-shrink-0 relative"
+            style={{ animationDelay: `${index * 80}ms` }}
+          >
+            <div className={`h-48 bg-gradient-to-br ${item.images[0]} flex items-center justify-center group-hover:scale-105 transition-transform duration-300 relative`}></div>
+            {/* Red heart icon for liked */}
+            <div className="absolute top-3 right-3 bg-white/90 rounded-full p-1 shadow">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="#ef4444" viewBox="0 0 24 24" strokeWidth="1.5" stroke="#ef4444" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.239-4.5-5-4.5-1.657 0-3.156.832-4 2.086C10.156 4.582 8.657 3.75 7 3.75c-2.761 0-5 2.015-5 4.5 0 7.25 10 12.5 10 12.5s10-5.25 10-12.5z" />
+              </svg>
+            </div>
+            <div className="p-4">
+              <h3 className="font-display text-lg font-semibold text-foreground mb-2 hover:text-primary transition-colors">{item.name}</h3>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {item.tags.map(tag => (
+                  <span key={tag} className="px-3 py-1 bg-accent/20 text-primary rounded-full text-xs font-medium border border-border">{tag}</span>
+                ))}
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+      <button
+        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-background/80 rounded-full p-2 shadow hover:bg-accent transition disabled:opacity-30"
+        onClick={() => handleScroll('right')}
+        disabled={!scrollRef.current || (scrollRef.current.scrollLeft + scrollRef.current.offsetWidth) >= (scrollRef.current.scrollWidth - 10)}
+        aria-label="Scroll right"
+        style={{ display: items.length > 2 ? 'block' : 'none' }}
+      >
+        <ChevronRight className="w-6 h-6" />
+      </button>
+    </div>
+  );
+};
+
+// Extracted ProductCard for reuse
+const ProductCard = ({ item, likedItems, favoriteItems, onLike, onFavorite, onAddToCart, user }: {
+  item: LookbookItem,
+  likedItems: Set<string>,
+  favoriteItems: Set<string>,
+  onLike: (id: string) => void,
+  onFavorite: (item: LookbookItem) => void,
+  onAddToCart: (item: LookbookItem) => void,
+  user: any
+}) => (
+  <article
+    className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 animate-fade-in group"
+  >
+    <Link to={`/products/${item.id}`} className="block">
+      <div className="h-64 bg-gradient-to-br from-primary-cream to-soft-pink flex items-center justify-center group-hover:scale-105 transition-transform duration-300 relative"></div>
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">
+            {item.category}
+          </span>
+        </div>
+        <h3 className="font-display text-lg font-semibold text-foreground mb-2 hover:text-primary transition-colors">
+          {item.title}
+        </h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          by {item.designer}
+        </p>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-1">
+            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+            <span className="text-sm font-medium">{item.rating}</span>
+          </div>
+          <span className="text-sm text-muted-foreground">
+            ({item.reviews} reviews)
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-foreground">
+              ${item.price}
+            </span>
+            {item.originalPrice && (
+              <span className="text-sm text-muted-foreground line-through">
+                ${item.originalPrice}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </Link>
+    <div className="flex items-center gap-2 p-4 pt-0">
+      <button
+        onClick={() => onLike(item.id)}
+        className={`p-2 rounded-full transition-colors ${
+          likedItems.has(item.id) 
+            ? 'text-red-500 bg-red-50' 
+            : 'text-muted-foreground hover:text-red-500 hover:bg-red-50'
+        }`}
+      >
+        <Heart className={`w-4 h-4 ${likedItems.has(item.id) ? 'fill-current' : ''}`} />
+      </button>
+      <button
+        onClick={() => onFavorite(item)}
+        className={`p-2 rounded-full transition-colors ${
+          favoriteItems.has(item.id)
+            ? 'text-primary bg-primary/10'
+            : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+        }`}
+      >
+        <Heart className={`w-4 h-4 ${favoriteItems.has(item.id) ? 'fill-current' : ''}`} />
+      </button>
+      <button
+        onClick={() => onAddToCart(item)}
+        className="px-3 py-1 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors flex items-center gap-1"
+      >
+        <ShoppingBag className="w-3 h-3" />
+        Add to Cart
+
+const Lookbook = () => {
+  const { persona } = useParams<{ persona: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [showSwipePopup, setShowSwipePopup] = useState(false);
+  const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
+  const [favoriteItems, setFavoriteItems] = useState<Set<string>>(new Set());
+  const [cartItems, setCartItems] = useState<Set<string>>(new Set());
+  const [lookbookData, setLookbookData] = useState<PersonaData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [hasSwipeResults, setHasSwipeResults] = useState(false);
+  // Collapsible skipped section
+  const [showSkipped, setShowSkipped] = useState(false);
+
+  // Restore swipe results from localStorage on mount/persona change
+  useEffect(() => {
+    const { liked, skipped } = getSwipeResults(persona || 'minimalist-style');
+    setSwipeLiked(liked);
+    setSwipeSkipped(skipped);
+    setHasSwipeResults((liked.length > 0 || skipped.length > 0));
+  }, [persona]);
+
+  // Persist persona to localStorage if present
+  useEffect(() => {
+    if (persona) {
+      localStorage.setItem('flexora-last-persona', persona);
+    }
+  }, [persona]);
+
+  // If no persona in URL, try to restore from localStorage
+  useEffect(() => {
+    if (!persona) {
+      const lastPersona = localStorage.getItem('flexora-last-persona');
+      if (lastPersona && personaData[lastPersona]) {
+        navigate(`/lookbook/${lastPersona}`, { replace: true });
+      }
+    }
+  }, [persona, navigate]);
+
+  const data = personaData[persona || 'minimalist-style'];
+  
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">Lookbook Not Found</h1>
+            <button
+              onClick={() => navigate('/')}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg"
+            >
+              Go Home
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  const categories = ['All', ...Array.from(new Set(data.items.map(item => item.category)))];
+  const filteredItems = selectedCategory === 'All' 
+    ? data.items 
+    : data.items.filter(item => item.category === selectedCategory);
+
+  const handleLike = (itemId: number) => {
+    setLikedItems(prev => {
+      const newLiked = new Set(prev);
+      if (newLiked.has(itemId)) {
+        newLiked.delete(itemId);
+      } else {
+        newLiked.add(itemId);
+      }
+      return newLiked;
+    });
+  };
+
+  const handleFavorite = (item: LookbookItem) => {
+    if (!user?.username) return;
+    
+    const savedFavorites = getStorageData(STORAGE_KEYS.FAVORITES, user.username, []);
+    const isAlreadyFavorite = savedFavorites.some((fav: any) => fav.id === item.id);
+    
+    if (!isAlreadyFavorite) {
+      const updatedFavorites = [...savedFavorites, { ...item, type: 'product' }];
+      setStorageData(STORAGE_KEYS.FAVORITES, updatedFavorites, user.username);
+      setFavoriteItems(prev => new Set([...prev, item.id]));
+      toast.success("Added to favorites!");
+    } else {
+      const updatedFavorites = savedFavorites.filter((fav: any) => fav.id !== item.id);
+      setStorageData(STORAGE_KEYS.FAVORITES, updatedFavorites, user.username);
+      setFavoriteItems(prev => {
+        const newFavs = new Set(prev);
+        newFavs.delete(item.id);
+        return newFavs;
+      });
+      toast.success("Removed from favorites!");
+    }
+  };
+
+  const handleAddToCart = (item: LookbookItem) => {
+    if (!user?.username) {
+      toast.error('Please login to add items to your cart.');
+      return;
+    }
+    
+    const cart = getStorageData(STORAGE_KEYS.CART, user.username, []);
+    const existing = cart.find((cartItem: any) => cartItem.id === item.id);
+    
+    if (existing) {
+      existing.quantity = (existing.quantity || 1) + 1;
+    } else {
+      cart.push({
+        id: item.id,
+        name: item.title,
+        price: item.price,
+        images: [item.image],
+        category: item.category,
+        quantity: 1
+      });
+    }
+    
+    setStorageData(STORAGE_KEYS.CART, cart, user.username);
+    toast.success("Added to cart!");
+    window.dispatchEvent(new Event('cart-updated'));
+  };
+
+  useEffect(() => {
+    // Load favorite items from localStorage (username-specific)
+    if (user?.username) {
+      const savedFavorites = getStorageData(STORAGE_KEYS.FAVORITES, user.username, []);
+      const favoriteIds = new Set(savedFavorites.map((fav: any) => fav.id).filter((id: any) => typeof id === 'number')) as Set<number>;
+      setFavoriteItems(favoriteIds);
+    }
+  }, [user?.username]);
+
+  const swipeProducts: SwipeProduct[] = data.items.map(item => ({
+    id: item.id,
+    name: item.title,
+    images: [item.image],
+    tags: item.category ? [item.category, ...(item.sizes || []), ...(item.colors || []), ...(item.featured ? ['featured'] : [])] : [],
+  }));
+
+  // Only show main grid for products not in liked/skipped
+  const likedIds = new Set(swipeLiked.map(p => p.id));
+  const skippedIds = new Set(swipeSkipped.map(p => p.id));
+  const remainingItems = filteredItems.filter(item => !likedIds.has(item.id) && !skippedIds.has(item.id));
+
+  return (
+    <>
+      <TrendSwipePopup
+        persona={persona || 'minimalist-style'}
+        products={swipeProducts}
+        isOpen={showSwipe}
+        onClose={() => setShowSwipe(false)}
+        onComplete={(liked, skipped) => {
+          setSwipeLiked(liked);
+          setSwipeSkipped(skipped);
+          setSwipeResults(persona || 'minimalist-style', liked, skipped);
+          setShowSwipe(false);
+        }}
+      />
+      <button
+        className="fixed bottom-8 right-8 z-50 w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent shadow-lg flex items-center justify-center hover:scale-110 transition-all group"
+        style={{ boxShadow: '0 4px 24px 0 rgba(0,0,0,0.15)' }}
+        onClick={() => setShowSwipe(true)}
+        title="Try Trend Swipe"
+        aria-label="Try Trend Swipe"
+      >
+        <Sparkles className="w-8 h-8 text-primary-foreground group-hover:animate-pulse" />
+        <span className="absolute bottom-20 right-0 bg-background text-foreground text-xs rounded px-3 py-1 shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Try Trend Swipe</span>
+      </button>
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        {/* Show See Your Swipe Results button if results exist and not currently shown */}
+        {hasSwipeResults && swipeLiked.length === 0 && swipeSkipped.length === 0 && (
+          <div className="flex justify-center mt-4">
+            <button
+              className="px-5 py-2 bg-accent text-accent-foreground rounded-lg font-medium shadow hover:scale-105 transition-all"
+              onClick={() => {
+                const { liked, skipped } = getSwipeResults(persona || 'minimalist-style');
+                setSwipeLiked(liked);
+                setSwipeSkipped(skipped);
+              }}
+            >
+              See Your Swipe Results
+            </button>
+          </div>
+        )}
+        {/* Liked Products Carousel (now vertical grid) */}
+        {swipeLiked.length > 0 && (
+          <section className="py-8 px-6">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex items-center gap-2 mb-4">
+                <Heart className="w-6 h-6 text-primary" />
+                <h2 className="font-display text-xl font-bold text-foreground">You Liked These!</h2>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {swipeLiked
+                  .map(item => data.items.find(i => i.id === item.id))
+                  .filter((item): item is LookbookItem => !!item)
+                  .map(item => (
+                    <ProductCard
+                      key={item.id}
+                      item={item}
+                      likedItems={likedItems}
+                      favoriteItems={favoriteItems}
+                      onLike={handleLike}
+                      onFavorite={handleFavorite}
+                      onAddToCart={handleAddToCart}
+                      user={user}
+                    />
+                  ))}
+              </div>
+            </div>
+          </section>
+        )}
+        {/* Skipped Products Collapsible (now vertical grid) */}
+        {swipeSkipped.length > 0 && (
+          <section className="py-4 px-6 mb-12">
+            <div className="max-w-6xl mx-auto">
+              <button
+                className="flex items-center gap-2 mb-2 text-muted-foreground hover:text-foreground text-sm font-medium"
+                onClick={() => setShowSkipped(v => !v)}
+                aria-expanded={showSkipped}
+              >
+                <ChevronLeft className={`w-4 h-4 transition-transform ${showSkipped ? 'rotate-[-90deg]' : 'rotate-180'}`} />
+                {showSkipped ? 'Hide' : 'Show'} Skipped Products ({swipeSkipped.length})
+              </button>
+              {showSkipped && (
+                <div className="mt-4">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 opacity-60">
+                    {swipeSkipped
+                      .map(item => data.items.find(i => i.id === item.id))
+                      .filter((item): item is LookbookItem => !!item)
+                      .map(item => (
+                        <ProductCard
+                          key={item.id}
+                          item={item}
+                          likedItems={likedItems}
+                          favoriteItems={favoriteItems}
+                          onLike={handleLike}
+                          onFavorite={handleFavorite}
+                          onAddToCart={handleAddToCart}
+                          user={user}
+                        />
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+        {/* Main grid: if no trend swipe, show all products as before */}
+        {(swipeLiked.length === 0 && swipeSkipped.length === 0) && (
+          <section className="py-16 px-6 bg-background">
+            <div className="max-w-6xl mx-auto">
+              <div className="text-center mb-8">
+                <h2 className="font-display text-2xl font-bold text-foreground mb-2">
+                  Your Personalized Collection
+                </h2>
+                <p className="text-muted-foreground mb-6">
+                  {filteredItems.length} products curated for your {data.title.toLowerCase().replace(' lookbook', '')} style
+                </p>
+                {/* Category Filter */}
+                <div className="flex flex-wrap justify-center gap-4">
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                        selectedCategory === category
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-card text-muted-foreground hover:text-foreground border-border'
+                      }`}
+                    >
+                      {category} ({data.items.filter(item => category === 'All' || item.category === category).length})
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredItems.map((item, index) => (
+                  <ProductCard
+                    key={item.id}
+                    item={item}
+                    likedItems={likedItems}
+                    favoriteItems={favoriteItems}
+                    onLike={handleLike}
+                    onFavorite={handleFavorite}
+                    onAddToCart={handleAddToCart}
+                    user={user}
+                  />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+        <PageHero 
+          title={data.title}
+          subtitle={data.description}
+          backgroundGradient="from-accent/30 to-secondary/20"
+        />
+
+        {/* Trending Styles */}
+        <section className="py-8 px-6 bg-card/50 border-b border-border">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="font-display text-xl font-bold text-foreground mb-4 text-center">
+              Trending in Your Style
+            </h2>
+            <div className="flex flex-wrap justify-center gap-3">
+              {data.trendingStyles.map((style, index) => (
+                <span
+                  key={index}
+                  className="px-4 py-2 bg-accent/20 text-primary rounded-full text-sm font-medium border border-border"
+                >
+                  {style}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Style Recommendations */}
+        <section className="py-12 px-6 bg-background border-b border-border">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="font-display text-2xl font-bold text-foreground mb-6 text-center">
+              Style Recommendations
+            </h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {data.recommendations.map((recommendation, index) => (
+                <div
+                  key={index}
+                  className="p-4 bg-card rounded-lg border border-border text-center shadow-sm"
+                >
+                  <p className="text-sm text-muted-foreground">{recommendation}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Explore More Products Section */}
+        <section className="py-16 px-6 bg-card/50 border-t border-border">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="font-display text-2xl font-bold text-foreground mb-4">
+              Explore More Products
+            </h2>
+            <p className="text-muted-foreground mb-8">
+              Discover our full collection of products across all categories and styles
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <Link
+                to="/products"
+                className="p-4 bg-background rounded-lg border border-border hover:border-primary transition-colors group"
+              >
+                <div className="text-2xl mb-2">👕</div>
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">All Products</h3>
+                <p className="text-xs text-muted-foreground">{products.length} items</p>
+              </Link>
+              <Link
+                to="/trending-looks"
+                className="p-4 bg-background rounded-lg border border-border hover:border-primary transition-colors group"
+              >
+                <div className="text-2xl mb-2">🔥</div>
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">Trending</h3>
+                <p className="text-xs text-muted-foreground">Latest styles</p>
+              </Link>
+              <Link
+                to="/categories"
+                className="p-4 bg-background rounded-lg border border-border hover:border-primary transition-colors group"
+              >
+                <div className="text-2xl mb-2">📂</div>
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">Categories</h3>
+                <p className="text-xs text-muted-foreground">Browse by style</p>
+              </Link>
+              <Link
+                to="/collections"
+                className="p-4 bg-background rounded-lg border border-border hover:border-primary transition-colors group"
+              >
+                <div className="text-2xl mb-2">🎨</div>
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">Collections</h3>
+                <p className="text-xs text-muted-foreground">Curated sets</p>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="py-16 px-6 bg-background border-t border-border">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="font-display text-3xl font-bold text-foreground mb-6">
+              Love Your Style Persona?
+            </h2>
+            <p className="text-lg text-muted-foreground mb-8">
+              Take the quiz again or explore more styles to discover new fashion possibilities
+            </p>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => navigate('/')}
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold transition-all duration-300 hover:scale-105 hover:bg-primary/90"
+              >
+                Take Quiz Again
+              </button>
+              <button
+                onClick={() => navigate('/trending-looks')}
+                className="px-6 py-3 bg-card text-foreground border border-border rounded-lg font-semibold transition-all duration-300 hover:scale-105 hover:bg-card/80"
+              >
+                Explore Trending Styles
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </>
+  );
+};
+
+export default Lookbook; 

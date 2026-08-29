@@ -1,0 +1,76 @@
+
+/* FLEXORA Color Palette and Design System */
+:root {
+    /* Primary Colors */
+    --primary-cream: #F5F1EB;
+    --primary-beige: #E8DDD4;
+    --warm-brown: #C4A484;
+    --rich-brown: #8B6F3F;
+    --deep-brown: #5D4E37;
+    
+    /* Accent Colors */
+    --soft-pink: #E6C2C2;
+    --muted-green: #A8B5A0;
+    --charcoal: #2C2C2C;
+    --off-white: #FAFAFA;
+    
+    /* Typography */
+    --font-display: 'Playfair Display', serif;
+    --font-body: 'Inter', sans-serif;
+    
+    /* Spacing */
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 1rem;
+    --spacing-md: 1.5rem;
+    --spacing-lg: 2rem;
+    --spacing-xl: 3rem;
+    --spacing-xxl: 4rem;
+    
+    /* Border Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    
+    /* Shadows */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body);
+    line-height: 1.6;
+    color: var(--charcoal);
+    background-color: var(--off-white);
+}
+
+/* Section Headings */
+h2 {
+    font-family: var(--font-display);
+    font-size: 2.5rem;
+    color: var(--charcoal);
+    margin-bottom: var(--spacing-xl);
+    font-weight: 600;
+}
+
+/* Smooth animations */
+* {
+    scroll-behavior: smooth;
+}
+
+/* Loading animation for images */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.hidden {
+    display: none;
+}

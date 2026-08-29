@@ -1,0 +1,141 @@
+
+/* Hero Section with Carousel */
+.hero {
+    margin-top: 80px;
+    height: 70vh;
+    position: relative;
+    overflow: hidden;
+}
+
+.carousel-container {
+    height: 100%;
+    position: relative;
+}
+
+.carousel {
+    height: 100%;
+    position: relative;
+}
+
+.carousel-slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 0.8s ease-in-out;
+    background: linear-gradient(135deg, var(--primary-cream) 0%, var(--primary-beige) 100%);
+}
+
+.carousel-slide.active {
+    opacity: 1;
+}
+
+.slide-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+    gap: var(--spacing-xxl);
+}
+
+.slide-image {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.model-placeholder {
+    width: 300px;
+    height: 400px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+.model-1 {
+    background: linear-gradient(45deg, var(--warm-brown), var(--rich-brown));
+}
+
+.model-2 {
+    background: linear-gradient(45deg, var(--muted-green), var(--rich-brown));
+}
+
+.model-3 {
+    background: linear-gradient(45deg, var(--soft-pink), var(--warm-brown));
+}
+
+.slide-text {
+    flex: 1;
+    text-align: left;
+}
+
+.slide-text h1 {
+    font-family: var(--font-display);
+    font-size: 3.5rem;
+    font-weight: 600;
+    color: var(--charcoal);
+    margin-bottom: var(--spacing-md);
+    line-height: 1.2;
+}
+
+.slide-text p {
+    font-size: 1.2rem;
+    color: var(--rich-brown);
+    font-weight: 300;
+}
+
+.carousel-dots {
+    position: absolute;
+    bottom: var(--spacing-lg);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(44, 44, 44, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.dot.active,
+.dot:hover {
+    background: var(--rich-brown);
+    transform: scale(1.2);
+}
+
+/* Page-specific Hero Sections */
+.trending-hero,
+.categories-hero {
+    margin-top: 80px;
+    height: 40vh;
+    background: linear-gradient(135deg, var(--primary-cream) 0%, var(--primary-beige) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.hero-content h1 {
+    font-family: var(--font-display);
+    font-size: 3.5rem;
+    color: var(--charcoal);
+    margin-bottom: var(--spacing-md);
+    font-weight: 600;
+}
+
+.hero-content p {
+    font-size: 1.2rem;
+    color: var(--rich-brown);
+    max-width: 800px;
+    margin: 0 auto;
+}
