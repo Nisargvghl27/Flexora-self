@@ -3,18 +3,6 @@ import { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 
 const LoadingAnimation = () => {
-  const [isVisible, setIsVisible] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-    }, 2500);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!isVisible) return null;
-
   return (
     <div className="fixed inset-0 z-50 bg-background flex items-center justify-center animate-fade-in">
       <div className="text-center animate-scale-in">

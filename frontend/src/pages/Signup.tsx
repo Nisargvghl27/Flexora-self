@@ -2,9 +2,12 @@ import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/card';
 import { Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import { Home, Building, Map } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Home, Building, Map, Eye, EyeOff } from 'lucide-react';
 import { setStorageData, STORAGE_KEYS } from '../lib/storage';
+import { useAuth } from '../contexts/AuthContext';
+import { PageTransition } from '../components/PageTransition';
+import { apiService } from '../services/api';
 
 
 const Signup = () => {
@@ -20,7 +23,16 @@ const Signup = () => {
   const [addressName, setAddressName] = useState('');
   const [addressType, setAddressType] = useState<'home' | 'work' | 'other'>('home');
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   // Password requirements regex
   const passwordRequirements = [
@@ -79,25 +91,9 @@ const Signup = () => {
     }
     
     try {
-      console.log('Sending registration request with data:', { username, email, phone, address });
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseURL}/api/register/`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ username, email, password, phone, address }),
-      });
+      const res = await apiService.register({ username, email, password, phone, address });
       
-      console.log('Registration response status:', response.status);
-      
-      const text = await response.text();
-      let data: any = {};
-      try { if (text) data = JSON.parse(text); } catch (_) {}
-      console.log('Registration response data:', data);
-      
-      if (response.ok) {
+      if (!res.error) {
         setError('');
         setSuccess('Registration successful! Redirecting to login...');
         
@@ -117,9 +113,9 @@ const Signup = () => {
         // Store in localStorage with username-specific key
         setStorageData(STORAGE_KEYS.SAVED_ADDRESSES, [defaultAddress], username);
         
-        setTimeout(() => navigate('/login'), 1500);
+        setTimeout(() => navigate('/verify-email'), 1500);
       } else {
-        setError(data.error || `Registration failed. Status: ${response.status}`);
+        setError(res.error || res.rawErrorData?.error || `Registration failed. Status: ${res.status}`);
       }
     } catch (err: any) {
       console.error('Registration error:', err);
@@ -129,9 +125,10 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Navigation />
-      <main className="flex-1 flex items-center justify-center py-16 px-4">
+    <PageTransition>
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navigation />
+        <main className="flex-1 flex items-center justify-center py-16 px-4">
         <Card className="w-full max-w-md shadow-lg">
           <CardHeader>
             <CardTitle className="text-center">Sign Up for Flexora</CardTitle>
@@ -156,7 +153,7 @@ const Signup = () => {
                   data-form-type="other"
                 />
                 {username && username.length < 3 && (
-                  <p className="text-xs text-orange-500 mt-1">Username must be at least 3 characters</p>
+                  <p className="text-xs text-orange-600 mt-1" role="alert">Username must be at least 3 characters</p>
                 )}
               </div>
               <div>
@@ -177,30 +174,40 @@ const Signup = () => {
                 <label htmlFor="password" className="block text-sm font-medium text-foreground mb-1">
                   Password <span className="text-red-500">*</span>
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={e => { 
-                    setPassword(e.target.value); 
-                    setError(''); 
-                    setSuccess('');
-                    // Show requirements when user starts typing
-                    if (e.target.value.length > 0) {
-                      setShowPasswordRequirements(true);
-                    }
-                  }}
-                  onFocus={() => {
-                    // Show requirements when user focuses on password field
-                    if (password.length > 0) {
-                      setShowPasswordRequirements(true);
-                    }
-                  }}
-                  className="w-full px-4 py-2 border border-border rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Enter your password"
-                  minLength={6}
-                  required
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => { 
+                      setPassword(e.target.value); 
+                      setError(''); 
+                      setSuccess('');
+                      // Show requirements when user starts typing
+                      if (e.target.value.length > 0) {
+                        setShowPasswordRequirements(true);
+                      }
+                    }}
+                    onFocus={() => {
+                      // Show requirements when user focuses on password field
+                      if (password.length > 0) {
+                        setShowPasswordRequirements(true);
+                      }
+                    }}
+                    className="w-full px-4 py-2 border border-border rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Enter your password"
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 
                 {/* Show Requirements Button */}
                 {!showPasswordRequirements && (
@@ -219,14 +226,14 @@ const Signup = () => {
                     <p className="text-xs text-muted-foreground mb-2">Password requirements:</p>
                     <ul className="space-y-1 text-xs">
                       {passwordRequirements.map((req, idx) => (
-                        <li key={idx} className={req.test(password) ? 'text-green-600 flex items-center gap-1' : 'text-gray-600 flex items-center gap-1'}>
+                        <li key={idx} className={req.test(password) ? 'text-green-600 flex items-center gap-1' : 'text-muted-foreground flex items-center gap-1'}>
                           <span className="inline-block w-3 h-3 rounded-full mr-1" style={{ background: req.test(password) ? '#16a34a' : '#6b7280' }}></span>
                           {req.label}
                         </li>
                       ))}
                     </ul>
                     {password && !isPasswordValid && (
-                      <p className="text-xs text-red-500 mt-1">Password does not meet all requirements</p>
+                      <p className="text-xs text-destructive mt-1" role="alert">Password does not meet all requirements</p>
                     )}
                   </div>
                 )}
@@ -235,17 +242,27 @@ const Signup = () => {
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-1">
                   Confirm Password <span className="text-red-500">*</span>
                 </label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => { setConfirmPassword(e.target.value); setError(''); setSuccess(''); }}
-                  className="w-full px-4 py-2 border border-border rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Confirm your password"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => { setConfirmPassword(e.target.value); setError(''); setSuccess(''); }}
+                    className="w-full px-4 py-2 border border-border rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Confirm your password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 {confirmPassword && password !== confirmPassword && (
-                  <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+                  <p className="text-xs text-destructive mt-1" role="alert">Passwords do not match</p>
                 )}
               </div>
               <div>
@@ -267,7 +284,7 @@ const Signup = () => {
                   Address Information <span className="text-red-500">*</span>
                 </label>
                 
-                <div className="space-y-4 p-4 border border-border rounded-lg bg-gray-50">
+                <div className="space-y-4 p-4 border border-border rounded-lg bg-muted">
                   {/* Address Name */}
                   <div>
                     <label htmlFor="addressName" className="block text-sm font-medium text-foreground mb-1">
@@ -327,8 +344,8 @@ const Signup = () => {
 
                 </div>
               </div>
-              {error && <div className="text-red-500 text-sm text-center">{error}</div>}
-              {success && <div className="text-green-600 text-sm text-center">{success}</div>}
+              {error && <div className="text-destructive text-sm text-center font-medium" role="alert" aria-live="assertive">{error}</div>}
+              {success && <div className="text-green-600 text-sm text-center font-medium" role="status" aria-live="polite">{success}</div>}
               <button
                 type="submit"
                 className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
@@ -343,9 +360,10 @@ const Signup = () => {
             </div>
           </CardContent>
         </Card>
-      </main>
-      <Footer />
-    </div>
+        </main>
+        <Footer />
+      </div>
+    </PageTransition>
   );
 };
 

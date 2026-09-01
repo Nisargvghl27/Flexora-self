@@ -26,7 +26,7 @@ router.get('/', authMiddleware, (req, res) => {
     });
     return res.json(lookbooks);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -44,7 +44,7 @@ router.post('/', authMiddleware, (req, res) => {
     const lookbook = db.prepare('SELECT * FROM lookbooks WHERE id = ?').get(id);
     return res.status(201).json(formatLookbook(lookbook));
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -110,7 +110,7 @@ router.get('/style/:style_persona/', authMiddleware, (req, res) => {
 
     return res.status(status).json(response);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -140,7 +140,7 @@ router.get('/:lookbook_id/', authMiddleware, (req, res) => {
       items_count: items.length
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -164,7 +164,7 @@ router.put('/:lookbook_id/', authMiddleware, (req, res) => {
 
     return res.json({ message: "Lookbook updated successfully" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -174,7 +174,7 @@ router.delete('/:lookbook_id/', authMiddleware, (req, res) => {
     db.prepare('UPDATE lookbooks SET is_active = 0 WHERE id = ? AND user_id = ?').run(req.params.lookbook_id, req.user.user_id);
     return res.json({ message: "Lookbook deleted successfully" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -206,7 +206,7 @@ router.post('/:lookbook_id/items/', authMiddleware, (req, res) => {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return res.status(400).json({ error: "Product already in lookbook" });
     }
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -220,7 +220,7 @@ router.delete('/:lookbook_id/items/:item_id/', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM lookbook_items WHERE id = ? AND lookbook_id = ?').run(item_id, lookbook_id);
     return res.json({ message: "Item removed from lookbook" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

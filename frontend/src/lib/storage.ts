@@ -31,4 +31,5 @@ export const STORAGE_KEYS = {
   LIKED_POSTS: 'flexora-liked-posts',
   FAVORITE_POSTS: 'flexora-favorite-posts',
   SWIPE_RESULTS: 'flexora-swipe-results',
+  RECENTLY_VIEWED: 'flexora-recently-viewed',
 } as const; 

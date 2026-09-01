@@ -4,8 +4,24 @@ const bcrypt = require('bcryptjs');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
 const upload = require('../middleware/upload');
+const { body } = require('express-validator');
+const validate = require('../middleware/validate');
 const fs = require('fs');
 const path = require('path');
+
+// GET /api/usernames/
+router.get('/usernames/', async (req, res) => {
+  try {
+    const search = req.query.search || '';
+    if (!search || search.trim().length === 0) {
+      return res.json([]);
+    }
+    const users = db.prepare('SELECT username FROM users WHERE username LIKE ? LIMIT 5').all(`%${search}%`);
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // GET /api/profile/
 router.get('/profile/', authMiddleware, (req, res) => {
@@ -31,19 +47,26 @@ router.get('/profile/', authMiddleware, (req, res) => {
     };
 
     if (row.profile_picture) {
-      response.profile_picture = `http://${req.get('host')}/media/profile_pictures/${row.profile_picture}`;
+      response.profile_picture = `${req.protocol}://${req.get('host')}/media/profile_pictures/${row.profile_picture}`;
     }
     if (row.selected_avatar) response.selected_avatar = row.selected_avatar;
     if (row.account_type) response.account_type = row.account_type;
 
     return res.json(response);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // PUT /api/profile/
-router.put('/profile/', authMiddleware, upload.single('profile_picture'), (req, res) => {
+const profileValidation = [
+  body('username').optional().trim().isLength({ min: 3, max: 30 }).withMessage('Username must be 3-30 characters').escape(),
+  body('email').optional().trim().isEmail().normalizeEmail().withMessage('Must be a valid email'),
+  body('phone').optional().trim().escape(),
+  body('address').optional().trim().escape(),
+];
+
+router.put('/profile/', authMiddleware, upload.single('profile_picture'), profileValidation, validate, (req, res) => {
   try {
     const { username, email, phone, address, selected_avatar, account_type } = req.body;
     const userId = req.user.user_id;
@@ -84,7 +107,7 @@ router.put('/profile/', authMiddleware, upload.single('profile_picture'), (req, 
 
     return res.json({ message: "Profile updated successfully." });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -111,7 +134,7 @@ router.put('/change-password/', authMiddleware, async (req, res) => {
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.user_id);
     return res.json({ message: "Password changed successfully." });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -142,7 +165,7 @@ router.delete('/delete-account/', authMiddleware, async (req, res) => {
     db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     return res.json({ message: "Account deleted successfully." });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

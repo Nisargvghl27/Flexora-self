@@ -1,11 +1,13 @@
-import Navigation from '../components/Navigation';
+﻿import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Calendar, DollarSign, Package, ArrowLeft, Filter, Search } from 'lucide-react';
-import { getStorageData, STORAGE_KEYS } from '../lib/storage';
+import { ShoppingCart, Calendar, DollarSign, Package, ArrowLeft, Filter, Search, ChevronDown, ChevronUp, CheckCircle, Clock, Truck, XCircle } from 'lucide-react';
+import { apiService } from '../services/api';
+import { EmptyState } from '../components/EmptyState';
+import { PageTransition } from '../components/PageTransition';
 
 const PastOrders = () => {
   const { user } = useAuth();
@@ -14,6 +16,7 @@ const PastOrders = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user) {
@@ -21,24 +24,47 @@ const PastOrders = () => {
       return;
     }
 
-    // Load orders from localStorage (username-specific)
-    if (!user?.username) return;
-    
-    const ordersData = getStorageData(STORAGE_KEYS.ORDERS, user.username, []);
-    setOrders(ordersData);
-    setLoading(false);
-  }, [user?.username, navigate]);
+    const fetchOrders = async () => {
+      setLoading(true);
+      const res = await apiService.getOrders();
+      if (res.data) {
+        setOrders(res.data.orders);
+      }
+      setLoading(false);
+    };
+
+    fetchOrders();
+  }, [user, navigate]);
+
+  const toggleExpand = (orderId: string) => {
+    setExpandedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const statusSteps = ['pending', 'confirmed', 'shipped', 'delivered'];
+
+  const getStatusIndex = (status: string) => {
+    return statusSteps.indexOf(status);
+  };
 
   // Filter orders based on search and status
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.customerInfo?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+                         (order.shipping_name || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   // Format date for display
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
       year: 'numeric', 
@@ -50,7 +76,7 @@ const PastOrders = () => {
   };
 
   // Get total spent
-  const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+  const totalSpent = orders.reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0);
 
   if (loading) {
     return (
@@ -68,7 +94,7 @@ const PastOrders = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <PageTransition>
       <Navigation />
       <main className="flex-1 py-16 px-4">
         <div className="max-w-6xl mx-auto">
@@ -162,101 +188,163 @@ const PastOrders = () => {
 
           {/* Orders List */}
           {filteredOrders.length === 0 ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <ShoppingCart className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">No orders found</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm || statusFilter !== 'all' 
-                    ? 'Try adjusting your search or filter criteria.'
-                    : 'You haven\'t placed any orders yet.'
+            <div className="animate-fade-in">
+              <EmptyState
+                icon={Package}
+                title="No orders found"
+                description={searchTerm || statusFilter !== 'all' ? "Try adjusting your search or filter criteria." : "You haven't placed any orders yet."}
+                actionLabel={!searchTerm && statusFilter === 'all' ? "Browse our collection" : "Clear filters"}
+                onAction={() => {
+                  if (!searchTerm && statusFilter === 'all') {
+                    navigate('/products');
+                  } else {
+                    setSearchTerm('');
+                    setStatusFilter('all');
                   }
-                </p>
-                {!searchTerm && statusFilter === 'all' && (
-                  <button
-                    onClick={() => navigate('/products')}
-                    className="mt-4 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                  >
-                    Start Shopping
-                  </button>
-                )}
-              </CardContent>
-            </Card>
+                }}
+              />
+            </div>
           ) : (
-            <div className="space-y-4">
-              {filteredOrders.map((order, index) => (
+            <div className="space-y-6">
+              {filteredOrders.map((order) => {
+                const isExpanded = expandedOrders.has(order.id);
+                const currentStepIndex = getStatusIndex(order.status);
+                const isCancelled = order.status === 'cancelled';
+
+                return (
                 <Card key={order.id} className="hover:shadow-lg transition-shadow">
                   <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="flex flex-col lg:flex-row gap-6">
                       <div className="flex-1">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center justify-between mb-4">
                           <div>
-                            <h3 className="text-lg font-semibold text-foreground">Order #{order.id}</h3>
+                            <h3 className="text-lg font-semibold text-foreground">Order #{order.razorpay_order_id || order.id}</h3>
                             <p className="text-sm text-muted-foreground flex items-center gap-1">
                               <Calendar className="w-4 h-4" />
-                              {formatDate(order.date)}
+                              {formatDate(order.created_at)}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xl font-bold text-green-600">${order.total.toFixed(2)}</p>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              order.status === 'completed' 
-                                ? 'bg-green-100 text-green-600' 
+                            <p className="text-xl font-bold text-green-600">${parseFloat(order.total_amount).toFixed(2)}</p>
+                            <span className={`text-xs px-2 py-1 rounded-full uppercase tracking-wide font-semibold ${
+                              order.status === 'delivered' 
+                                ? 'bg-green-100 text-green-700' 
                                 : order.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-600'
-                                : 'bg-red-100 text-red-600'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : order.status === 'cancelled'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-blue-100 text-blue-700'
                             }`}>
                               {order.status}
                             </span>
                           </div>
                         </div>
+
+                        {/* Status Stepper */}
+                        {!isCancelled && (
+                          <div className="my-6">
+                            <div className="flex items-center justify-between relative">
+                              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-border -z-10 rounded-full"></div>
+                              <div 
+                                className="absolute left-0 top-1/2 transform -translate-y-1/2 h-1 bg-primary -z-10 rounded-full transition-all duration-500"
+                                style={{ width: `${(currentStepIndex / (statusSteps.length - 1)) * 100}%` }}
+                              ></div>
+                              
+                              {statusSteps.map((step, index) => {
+                                const isCompleted = index <= currentStepIndex;
+                                const isCurrent = index === currentStepIndex;
+                                return (
+                                  <div key={step} className="flex flex-col items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                                      isCompleted ? 'bg-primary border-primary text-primary-foreground' : 'bg-background border-border text-muted-foreground'
+                                    }`}>
+                                      {step === 'pending' && <Clock className="w-4 h-4" />}
+                                      {step === 'confirmed' && <CheckCircle className="w-4 h-4" />}
+                                      {step === 'shipped' && <Truck className="w-4 h-4" />}
+                                      {step === 'delivered' && <Package className="w-4 h-4" />}
+                                    </div>
+                                    <span className={`text-xs font-medium capitalize hidden sm:block ${isCompleted ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                      {step}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {isCancelled && (
+                          <div className="my-6 flex items-center gap-2 text-red-600 bg-red-50 p-4 rounded-lg">
+                            <XCircle className="w-6 h-6" />
+                            <span className="font-semibold">This order has been cancelled.</span>
+                          </div>
+                        )}
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4 border-t border-border pt-4">
                           <div>
                             <p className="text-muted-foreground">Customer</p>
-                            <p className="font-medium">{order.customerInfo?.name}</p>
+                            <p className="font-medium">{order.shipping_name || user?.username}</p>
                           </div>
                           <div>
-                            <p className="text-muted-foreground">Items</p>
-                            <p className="font-medium">{order.items.length} product(s)</p>
+                            <p className="text-muted-foreground">Payment ID</p>
+                            <p className="font-medium">{order.razorpay_payment_id || 'N/A'}</p>
                           </div>
                         </div>
 
-                        {/* Order Items Preview */}
-                        <div className="mt-4">
-                          <p className="text-sm text-muted-foreground mb-2">Items:</p>
-                          <div className="space-y-2">
-                            {order.items.slice(0, 3).map((item: any, itemIndex: number) => (
-                              <div key={itemIndex} className="flex items-center gap-3 text-sm">
-                                <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-accent/30 rounded flex items-center justify-center">
-                                  <Package className="w-4 h-4 text-primary/60" />
+                        {/* Order Items Preview / Expand */}
+                        <div className="border-t border-border pt-4">
+                          <button 
+                            onClick={() => toggleExpand(order.id)}
+                            className="flex items-center justify-between w-full p-2 hover:bg-accent rounded-lg transition-colors"
+                          >
+                            <div className="font-medium">
+                              {order.items.length} Item{order.items.length !== 1 ? 's' : ''}
+                            </div>
+                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          </button>
+
+                          {isExpanded && (
+                            <div className="mt-4 space-y-4 px-2">
+                              {order.items.map((item: any, itemIndex: number) => (
+                                <div key={itemIndex} className="flex items-start justify-between text-sm p-3 bg-accent/30 rounded-lg">
+                                  <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-accent/30 rounded-md flex items-center justify-center mt-1">
+                                      <Package className="w-6 h-6 text-primary/60" />
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-foreground">{item.product_name}</p>
+                                      <div className="text-muted-foreground mt-1 space-y-1">
+                                        <p>Qty: {item.quantity}</p>
+                                        {(item.size || item.color) && (
+                                          <p>
+                                            {item.size && `Size: ${item.size}`}
+                                            {item.size && item.color && ' | '}
+                                            {item.color && `Color: ${item.color}`}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right font-medium">
+                                    ${(parseFloat(item.product_price) * item.quantity).toFixed(2)}
+                                  </div>
                                 </div>
-                                <div className="flex-1">
-                                  <p className="font-medium">{item.name}</p>
-                                  <p className="text-muted-foreground">
-                                    Qty: {item.quantity} × ${item.price}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                            {order.items.length > 3 && (
-                              <p className="text-sm text-muted-foreground italic">
-                                +{order.items.length - 3} more items
-                              </p>
-                            )}
-                          </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </main>
       <Footer />
-    </div>
+    </PageTransition>
   );
 };
 

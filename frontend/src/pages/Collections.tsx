@@ -1,11 +1,11 @@
-
+﻿
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import PageHero from '../components/PageHero';
 import { Heart, Eye, MessageCircle, Palette, Layers, ShoppingBag } from 'lucide-react';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import { getStorageData, setStorageData, STORAGE_KEYS } from '../lib/storage';
 
 const Collections = () => {

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Upload, Save, Eye, Tag, Calendar, User, FileText, Image, Hash, TrendingUp, Star, Globe } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { apiService } from '../services/api';
+import TipTapEditor from '../components/TipTapEditor';
 
 interface BlogFormData {
   title: string;
@@ -86,15 +88,10 @@ const WriteBlog: React.FC = () => {
   };
 
   const testAuthentication = async () => {
-    console.log('=== AUTHENTICATION DEBUG ===');
     const token = localStorage.getItem('accessToken');
     const refreshToken = localStorage.getItem('refreshToken');
     const username = localStorage.getItem('username');
     
-    console.log('Token exists:', !!token);
-    console.log('Refresh token exists:', !!refreshToken);
-    console.log('Username:', username);
-    console.log('Token preview:', token ? token.substring(0, 50) + '...' : 'No token');
     
     if (token) {
       try {
@@ -102,13 +99,8 @@ const WriteBlog: React.FC = () => {
         const tokenParts = token.split('.');
         if (tokenParts.length === 3) {
           const payload = JSON.parse(atob(tokenParts[1]));
-          console.log('Token payload:', payload);
-          console.log('Token exp:', payload.exp);
-          console.log('Current time:', Math.floor(Date.now() / 1000));
-          console.log('Token expired:', payload.exp < Math.floor(Date.now() / 1000));
         }
       } catch (e) {
-        console.log('Could not decode token:', e);
       }
     }
     
@@ -118,46 +110,23 @@ const WriteBlog: React.FC = () => {
     }
     
     // Test with a simple authenticated endpoint
-    console.log('Testing with profile endpoint...');
     try {
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseURL}/api/profile/`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiService.getProfile();
       
-      console.log('Profile endpoint response status:', response.status);
-      console.log('Profile endpoint response headers:', Object.fromEntries(response.headers.entries()));
       
       if (response.status === 401) {
-        const text = await response.text().catch(() => '');
-        let errorData: any = {};
-        try { if (text) errorData = JSON.parse(text); } catch (_) {}
-        console.log('401 Error details:', errorData);
-        setSubmitError(`Token is invalid or expired. Error: ${JSON.stringify(errorData)}. Please log in again.`);
-      } else if (response.ok) {
-        const text = await response.text();
-        let data: any = {};
-        try { if (text) data = JSON.parse(text); } catch (_) {}
-        console.log('Profile data:', data);
+        setSubmitError(`Token is invalid or expired. Error: ${JSON.stringify(response.rawErrorData)}. Please log in again.`);
+      } else if (!response.error) {
         setSubmitError('');
         alert('Authentication test successful! Token is valid.');
       } else {
-        const text = await response.text().catch(() => '');
-        let errorData: any = {};
-        try { if (text) errorData = JSON.parse(text); } catch (_) {}
-        console.log('Other error:', errorData);
-        setSubmitError(`Unexpected error: ${response.status} - ${JSON.stringify(errorData)}`);
+        setSubmitError(`Unexpected error: ${response.status} - ${JSON.stringify(response.rawErrorData)}`);
       }
     } catch (error) {
       console.error('Network error during auth test:', error);
       setSubmitError(`Network error: ${error}`);
     }
     
-    console.log('=== END AUTHENTICATION DEBUG ===');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -198,7 +167,7 @@ const WriteBlog: React.FC = () => {
       }
       
       // Success - show message and redirect
-      alert('Blog post created successfully!');
+      toast.success('Blog post created successfully!');
       navigate('/profile');
       
     } catch (error) {
@@ -246,7 +215,7 @@ const WriteBlog: React.FC = () => {
       }
       
       // Success - show message and redirect
-      alert('Draft saved successfully!');
+      toast.success('Draft saved successfully!');
       navigate('/profile');
       
     } catch (error) {
@@ -258,21 +227,21 @@ const WriteBlog: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-muted">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-card shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <Link 
                 to="/profile" 
-                className="flex items-center text-gray-600 hover:text-purple-600 transition-colors"
+                className="flex items-center text-muted-foreground hover:text-purple-600 transition-colors"
               >
                 <ArrowLeft className="h-5 w-5 mr-2" />
                 Back to Profile
               </Link>
-              <div className="h-6 border-l border-gray-300"></div>
-              <h1 className="text-xl font-semibold text-gray-900">Write a Blog Post</h1>
+              <div className="h-6 border-l border-border"></div>
+              <h1 className="text-xl font-semibold text-foreground">Write a Blog Post</h1>
             </div>
             
             <div className="flex items-center space-x-3">
@@ -287,7 +256,7 @@ const WriteBlog: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsPreview(!isPreview)}
-                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="flex items-center px-4 py-2 text-sm font-medium text-muted-foreground bg-card border border-border rounded-md hover:bg-muted transition-colors"
               >
                 <Eye className="h-4 w-4 mr-2" />
                 {isPreview ? 'Edit' : 'Preview'}
@@ -297,7 +266,7 @@ const WriteBlog: React.FC = () => {
                 type="button"
                 onClick={handleSaveDraft}
                 disabled={isSubmitting}
-                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center px-4 py-2 text-sm font-medium text-muted-foreground bg-card border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="h-4 w-4 mr-2" />
                 {isSubmitting ? 'Saving...' : 'Save Draft'}
@@ -331,15 +300,15 @@ const WriteBlog: React.FC = () => {
           /* Edit Mode */
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* Basic Information */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+            <div className="bg-card rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-6 flex items-center">
                 <FileText className="h-5 w-5 mr-2 text-purple-600" />
                 Basic Information
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
-                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="title" className="block text-sm font-medium text-muted-foreground mb-2">
                     Title *
                   </label>
                   <input
@@ -349,13 +318,13 @@ const WriteBlog: React.FC = () => {
                     value={formData.title}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Enter your blog post title"
                   />
                 </div>
                 
                 <div>
-                  <label htmlFor="author" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="author" className="block text-sm font-medium text-muted-foreground mb-2">
                     <User className="h-4 w-4 inline mr-1" />
                     Author *
                   </label>
@@ -366,13 +335,13 @@ const WriteBlog: React.FC = () => {
                     value={formData.author}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Author name"
                   />
                 </div>
                 
                 <div>
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="category" className="block text-sm font-medium text-muted-foreground mb-2">
                     <Tag className="h-4 w-4 inline mr-1" />
                     Category *
                   </label>
@@ -382,7 +351,7 @@ const WriteBlog: React.FC = () => {
                     value={formData.category}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
                     <option value="">Select a category</option>
                     {categoryChoices.map(choice => (
@@ -395,9 +364,9 @@ const WriteBlog: React.FC = () => {
               </div>
               
               <div className="mt-6">
-                <label htmlFor="excerpt" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="excerpt" className="block text-sm font-medium text-muted-foreground mb-2">
                   Excerpt
-                  <span className="text-gray-500 text-xs ml-1">(Short summary, max 500 characters)</span>
+                  <span className="text-muted-foreground text-xs ml-1">(Short summary, max 500 characters)</span>
                 </label>
                 <textarea
                   id="excerpt"
@@ -406,43 +375,37 @@ const WriteBlog: React.FC = () => {
                   onChange={handleInputChange}
                   rows={3}
                   maxLength={500}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   placeholder="Write a brief summary of your blog post..."
                 />
-                <div className="text-right text-xs text-gray-500 mt-1">
+                <div className="text-right text-xs text-muted-foreground mt-1">
                   {formData.excerpt.length}/500 characters
                 </div>
               </div>
             </div>
 
             {/* Content */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">
+            <div className="bg-card rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-6">
                 Content *
               </h2>
               
-              <textarea
-                id="content"
-                name="content"
-                value={formData.content}
-                onChange={handleInputChange}
-                required
-                rows={15}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Write your blog content here..."
+              <TipTapEditor 
+                content={formData.content}
+                onChange={(content) => setFormData(prev => ({ ...prev, content }))}
               />
             </div>
 
             {/* Cover Image */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+            <div className="bg-card rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-6 flex items-center">
                 <Image className="h-5 w-5 mr-2 text-purple-600" />
                 Cover Image
               </h2>
               
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="cover_image" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="cover_image" className="block text-sm font-medium text-muted-foreground mb-2">
                     Upload Image
                   </label>
                   <input
@@ -451,14 +414,14 @@ const WriteBlog: React.FC = () => {
                     name="cover_image"
                     onChange={handleImageChange}
                     accept="image/*"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
                 </div>
                 
-                <div className="text-center text-gray-500">OR</div>
+                <div className="text-center text-muted-foreground">OR</div>
                 
                 <div>
-                  <label htmlFor="cover_image_url" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="cover_image_url" className="block text-sm font-medium text-muted-foreground mb-2">
                     Image URL
                   </label>
                   <input
@@ -467,14 +430,14 @@ const WriteBlog: React.FC = () => {
                     name="cover_image_url"
                     value={formData.cover_image_url}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="https://example.com/image.jpg"
                   />
                 </div>
                 
                 {(imagePreview || formData.cover_image_url) && (
                   <div className="mt-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Preview:</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Preview:</p>
                     <img
                       src={imagePreview || formData.cover_image_url}
                       alt="Cover preview"
@@ -486,17 +449,17 @@ const WriteBlog: React.FC = () => {
             </div>
 
             {/* SEO & Metadata */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+            <div className="bg-card rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-6 flex items-center">
                 <Globe className="h-5 w-5 mr-2 text-purple-600" />
                 SEO & Metadata
               </h2>
               
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="meta_title" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="meta_title" className="block text-sm font-medium text-muted-foreground mb-2">
                     SEO Title
-                    <span className="text-gray-500 text-xs ml-1">(max 60 characters)</span>
+                    <span className="text-muted-foreground text-xs ml-1">(max 60 characters)</span>
                   </label>
                   <input
                     type="text"
@@ -505,18 +468,18 @@ const WriteBlog: React.FC = () => {
                     value={formData.meta_title}
                     onChange={handleInputChange}
                     maxLength={60}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="SEO optimized title"
                   />
-                  <div className="text-right text-xs text-gray-500 mt-1">
+                  <div className="text-right text-xs text-muted-foreground mt-1">
                     {formData.meta_title.length}/60 characters
                   </div>
                 </div>
                 
                 <div>
-                  <label htmlFor="meta_description" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="meta_description" className="block text-sm font-medium text-muted-foreground mb-2">
                     SEO Description
-                    <span className="text-gray-500 text-xs ml-1">(max 160 characters)</span>
+                    <span className="text-muted-foreground text-xs ml-1">(max 160 characters)</span>
                   </label>
                   <textarea
                     id="meta_description"
@@ -525,19 +488,19 @@ const WriteBlog: React.FC = () => {
                     onChange={handleInputChange}
                     maxLength={160}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="SEO description for search engines"
                   />
-                  <div className="text-right text-xs text-gray-500 mt-1">
+                  <div className="text-right text-xs text-muted-foreground mt-1">
                     {formData.meta_description.length}/160 characters
                   </div>
                 </div>
                 
                 <div>
-                  <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="tags" className="block text-sm font-medium text-muted-foreground mb-2">
                     <Hash className="h-4 w-4 inline mr-1" />
                     Tags
-                    <span className="text-gray-500 text-xs ml-1">(comma-separated)</span>
+                    <span className="text-muted-foreground text-xs ml-1">(comma-separated)</span>
                   </label>
                   <input
                     type="text"
@@ -545,7 +508,7 @@ const WriteBlog: React.FC = () => {
                     name="tags"
                     value={formData.tags}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="fashion, style, trends, minimalist"
                   />
                 </div>
@@ -553,8 +516,8 @@ const WriteBlog: React.FC = () => {
             </div>
 
             {/* Publishing Options */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+            <div className="bg-card rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-6 flex items-center">
                 <Calendar className="h-5 w-5 mr-2 text-purple-600" />
                 Publishing Options
               </h2>
@@ -567,9 +530,9 @@ const WriteBlog: React.FC = () => {
                     name="is_published"
                     checked={formData.is_published}
                     onChange={handleInputChange}
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-border rounded"
                   />
-                  <label htmlFor="is_published" className="ml-2 block text-sm text-gray-700">
+                  <label htmlFor="is_published" className="ml-2 block text-sm text-muted-foreground">
                     Publish immediately
                   </label>
                 </div>
@@ -581,9 +544,9 @@ const WriteBlog: React.FC = () => {
                     name="is_featured"
                     checked={formData.is_featured}
                     onChange={handleInputChange}
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-border rounded"
                   />
-                  <label htmlFor="is_featured" className="ml-2 block text-sm text-gray-700">
+                  <label htmlFor="is_featured" className="ml-2 block text-sm text-muted-foreground">
                     <Star className="h-4 w-4 inline mr-1" />
                     Mark as featured (homepage display)
                   </label>
@@ -596,9 +559,9 @@ const WriteBlog: React.FC = () => {
                     name="is_trending"
                     checked={formData.is_trending}
                     onChange={handleInputChange}
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-border rounded"
                   />
-                  <label htmlFor="is_trending" className="ml-2 block text-sm text-gray-700">
+                  <label htmlFor="is_trending" className="ml-2 block text-sm text-muted-foreground">
                     <TrendingUp className="h-4 w-4 inline mr-1" />
                     Mark as trending
                   </label>
@@ -610,7 +573,7 @@ const WriteBlog: React.FC = () => {
             <div className="flex justify-end space-x-4">
               <Link
                 to="/profile"
-                className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                className="px-6 py-2 border border-border rounded-md text-muted-foreground hover:bg-muted transition-colors"
               >
                 Cancel
               </Link>
@@ -626,7 +589,7 @@ const WriteBlog: React.FC = () => {
           </form>
         ) : (
           /* Preview Mode */
-          <div className="bg-white rounded-lg shadow-sm border p-8">
+          <div className="bg-card rounded-lg shadow-sm border p-8">
             <div className="max-w-3xl mx-auto">
               {/* Cover Image */}
               {(imagePreview || formData.cover_image_url) && (
@@ -649,12 +612,12 @@ const WriteBlog: React.FC = () => {
               )}
               
               {/* Title */}
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">
+              <h1 className="text-3xl font-bold text-foreground mb-4">
                 {formData.title || 'Blog Title'}
               </h1>
               
               {/* Author and Meta */}
-              <div className="flex items-center text-gray-600 text-sm mb-6">
+              <div className="flex items-center text-muted-foreground text-sm mb-6">
                 <User className="h-4 w-4 mr-1" />
                 <span>{formData.author || 'Author Name'}</span>
                 <span className="mx-2">•</span>
@@ -664,30 +627,31 @@ const WriteBlog: React.FC = () => {
               
               {/* Excerpt */}
               {formData.excerpt && (
-                <div className="text-lg text-gray-600 mb-8 italic border-l-4 border-purple-200 pl-4">
+                <div className="text-lg text-muted-foreground mb-8 italic border-l-4 border-purple-200 pl-4">
                   {formData.excerpt}
                 </div>
               )}
               
               {/* Content */}
-              <div className="prose max-w-none">
+              <div className="bg-card rounded-xl border border-border p-8 mb-8">
                 {formData.content ? (
-                  <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-                    {formData.content}
-                  </div>
+                  <div 
+                    className="prose dark:prose-invert max-w-none text-muted-foreground leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: formData.content }}
+                  />
                 ) : (
-                  <p className="text-gray-500 italic">Blog content will appear here...</p>
+                  <p className="text-muted-foreground italic">Blog content will appear here...</p>
                 )}
               </div>
               
               {/* Tags */}
               {formData.tags && (
-                <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="mt-8 pt-6 border-t border-border">
                   <div className="flex flex-wrap gap-2">
                     {formData.tags.split(',').map((tag, index) => (
                       <span
                         key={index}
-                        className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+                        className="inline-block px-2 py-1 text-xs bg-muted text-muted-foreground rounded"
                       >
                         #{tag.trim()}
                       </span>

@@ -1,58 +1,35 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import AdminLayout from '../components/admin/AdminLayout';
 import AdminDashboard from '../components/admin/AdminDashboard';
 import AdminUsers from '../components/admin/AdminUsers';
 import AdminProducts from '../components/admin/AdminProducts';
+import AdminOrders from '../components/admin/AdminOrders';
 import AdminBlogs from '../components/admin/AdminBlogs';
-import AdminCommunity from '../components/admin/AdminCommunity';
+import AdminCoupons from '../components/admin/AdminCoupons';
 import Navigation from '../components/Navigation';
+import { useProfile } from '../hooks/useProfile';
 
 const AdminPanel = () => {
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const [isAdmin, setIsAdmin] = useState(null);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
   const token = localStorage.getItem('accessToken');
+  const { profile, isLoading: loading, error } = useProfile();
+  const isAdmin = profile?.is_staff || profile?.is_superuser || false;
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-        const res = await fetch(`${baseURL}/api/profile/`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.is_staff || data.is_superuser) {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(false);
-          }
-        } else {
-          setIsAdmin(false);
-          if (res.status === 401) {
-            navigate('/login');
-          }
-        }
-      } catch (err) {
-        console.error('Error checking admin status:', err);
-        setIsAdmin(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAdminStatus();
+    if (!token) {
+      navigate('/login');
+    }
   }, [token, navigate]);
+
+  useEffect(() => {
+    if (error && error.message.includes('401')) {
+      navigate('/login');
+    }
+  }, [error, navigate]);
 
   if (loading) {
     return (
@@ -90,8 +67,9 @@ const AdminPanel = () => {
       case 'dashboard': return <AdminDashboard token={token} />;
       case 'users': return <AdminUsers token={token} />;
       case 'products': return <AdminProducts token={token} />;
+      case 'orders': return <AdminOrders token={token} />;
       case 'blogs': return <AdminBlogs token={token} />;
-      case 'community': return <AdminCommunity token={token} />;
+      case 'coupons': return <AdminCoupons token={token} />;
       default: return <AdminDashboard token={token} />;
     }
   };

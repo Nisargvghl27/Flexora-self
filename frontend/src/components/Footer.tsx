@@ -1,6 +1,6 @@
 
 import { Link } from 'react-router-dom';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 
 const Footer = () => {
   const { user } = useAuth();
@@ -13,7 +13,7 @@ const Footer = () => {
             <h4 className="text-2xl font-bold text-primary mb-4 font-display">FLEXORA</h4>
             <p className="text-muted-foreground leading-relaxed">
               Flex your Aura - Your gateway to fashion innovation and student creativity. 
-              Discover your unique style and connect with a vibrant community of fashion enthusiasts.
+              Discover your unique style and shop the latest trends.
             </p>
           </div>
           
@@ -26,21 +26,6 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/trending-looks" className="text-muted-foreground hover:text-primary transition-colors">
-                  Trending Looks
-                </Link>
-              </li>
-              <li>
-                <Link to="/style-categories" className="text-muted-foreground hover:text-primary transition-colors">
-                  Style Categories
-                </Link>
-              </li>
-              <li>
-                <Link to="/student-spotlights" className="text-muted-foreground hover:text-primary transition-colors">
-                  Student Spotlights
-                </Link>
-              </li>
-              <li>
                 <Link to="/collections" className="text-muted-foreground hover:text-primary transition-colors">
                   Collections
                 </Link>
@@ -50,41 +35,61 @@ const Footer = () => {
                   Products
                 </Link>
               </li>
-              {/* Login and Sign Up links removed. Use account icon in navigation. */}
+              <li>
+                <Link to="/community" className="text-muted-foreground hover:text-primary transition-colors">
+                  Community
+                </Link>
+              </li>
+              <li>
+                <Link to="/lookbook/1" className="text-muted-foreground hover:text-primary transition-colors">
+                  Lookbooks
+                </Link>
+              </li>
             </ul>
           </div>
           
           <div>
-            <h4 className="text-lg font-semibold text-foreground mb-6">Connect</h4>
+            <h4 className="text-lg font-semibold text-foreground mb-6">Account</h4>
             <ul className="space-y-3">
-              <li>
-                <Link to="/submit-design" className="text-muted-foreground hover:text-primary transition-colors">
-                  Submit Your Design
-                </Link>
-              </li>
-              <li>
-                {user ? (
-                  <Link to="/join-community" className="text-muted-foreground hover:text-primary transition-colors">
-                    Join Community
-                  </Link>
-                ) : (
-                  <Link to="/login" className="text-muted-foreground hover:text-primary transition-colors">
-                    Login to Join Community
-                  </Link>
-                )}
-              </li>
-              <li>
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Newsletter
-                </a>
-              </li>
+              {user ? (
+                <>
+                  <li>
+                    <Link to="/profile" className="text-muted-foreground hover:text-primary transition-colors">
+                      My Profile
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/favorites" className="text-muted-foreground hover:text-primary transition-colors">
+                      Favorites
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/past-orders" className="text-muted-foreground hover:text-primary transition-colors">
+                      Past Orders
+                    </Link>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <Link to="/login" className="text-muted-foreground hover:text-primary transition-colors">
+                      Login
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/signup" className="text-muted-foreground hover:text-primary transition-colors">
+                      Sign Up
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
         </div>
         
         <div className="border-t border-border mt-12 pt-8 text-center">
           <p className="text-muted-foreground">
-            &copy; 2025 FLEXORA. All rights reserved.
+            &copy; {new Date().getFullYear()} FLEXORA. All rights reserved.
           </p>
         </div>
       </div>

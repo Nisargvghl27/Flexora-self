@@ -3,11 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import PageHero from '../components/PageHero';
-import TrendSwipePopup from '../components/TrendSwipePopup';
+import { lazy, Suspense } from 'react';
+const TrendSwipePopup = lazy(() => import('../components/TrendSwipePopup'));
 import { ArrowLeft, Sparkles, ShoppingBag, Star, Heart } from 'lucide-react';
 import { toast } from "sonner";
 import { lookbookApi, productApi, Product, Lookbook as LookbookType, LookbookItem as LookbookItemType } from '../services/lookbookApi';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import { getStorageData, setStorageData, STORAGE_KEYS } from '../lib/storage';
 
 interface LookbookItem {
@@ -792,13 +793,15 @@ const Lookbook = () => {
       
       {/* Trend Swipe Popup */}
       {lookbookData && (
-        <TrendSwipePopup
-          persona={persona || ''}
-          products={lookbookData.items.map(convertToSwipeProduct)}
-          isOpen={showTrendSwipe}
-          onClose={() => setShowTrendSwipe(false)}
-          onComplete={handleSwipeComplete}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">Loading TrendSwipe...</div>}>
+          <TrendSwipePopup
+            persona={persona || ''}
+            products={lookbookData.items.map(convertToSwipeProduct)}
+            isOpen={showTrendSwipe}
+            onClose={() => setShowTrendSwipe(false)}
+            onComplete={handleSwipeComplete}
+          />
+        </Suspense>
       )}
     </div>
   );

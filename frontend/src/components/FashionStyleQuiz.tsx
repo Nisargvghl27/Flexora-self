@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, ChevronLeft, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
+import { apiService } from '../services/api';
 
 interface QuizQuestion {
   id: number;
@@ -285,23 +286,16 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
     
     setIsSubmitting(true);
     try {
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseURL}/api/quiz/submit/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          answers: answers,
-          persona: result.persona,
-          timestamp: new Date().toISOString()
-        }),
+      const response = await apiService.submitQuiz({
+        answers: answers,
+        persona: result.persona,
+        timestamp: new Date().toISOString()
       });
 
-      if (response.ok) {
+      if (!response.error) {
         const personaSlug = result.persona.toLowerCase().replace(/\s+/g, '-');
         localStorage.setItem('flexora-last-persona', personaSlug);
-        navigate(`/lookbook/${personaSlug}`);
+        navigate(`/products`);
         onClose();
       } else {
         console.error('Failed to submit quiz');
@@ -336,11 +330,11 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className="bg-card text-card-foreground rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="relative p-8">
           <button
             onClick={handleClose}
-            className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors z-10"
+            className="absolute top-6 right-6 text-muted-foreground hover:text-foreground transition-colors z-10"
           >
             <X size={24} />
           </button>
@@ -349,21 +343,21 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-amber-400 to-rose-400 rounded-full mb-4">
               <Sparkles className="text-white" size={24} />
             </div>
-            <h3 className="text-3xl font-bold text-gray-800 font-serif">
+            <h3 className="text-3xl font-bold text-foreground font-display">
               Discover Your Style Persona
             </h3>
-            <p className="text-gray-600 mt-2">
+            <p className="text-muted-foreground mt-2">
               Answer 6 questions to unlock your unique fashion identity
             </p>
           </div>
 
           {/* Progress Bar */}
           <div className="mb-8">
-            <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+            <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
               <span>Question {currentStep + 1} of {quizQuestions.length}</span>
               <span>{Math.round(progress)}% Complete</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-secondary rounded-full h-2">
               <div 
                 className="bg-gradient-to-r from-amber-400 to-rose-400 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
@@ -374,7 +368,7 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
           {!showResult ? (
             <div className="animate-fade-in">
               <div className="mb-8">
-                <h4 className="text-xl font-semibold text-gray-800 mb-6 text-center">
+                <h4 className="text-xl font-semibold text-foreground mb-6 text-center">
                   {currentQuestion.question}
                 </h4>
                 
@@ -383,10 +377,10 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
                     <button
                       key={option.id}
                       onClick={() => handleOptionSelect(option.id)}
-                      className="group p-6 text-left bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 border-2 border-gray-200 hover:border-amber-300 rounded-2xl transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                      className="group p-6 text-left bg-secondary/50 hover:bg-secondary border-2 border-border hover:border-primary rounded-2xl transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                     >
                       {/* Option Image */}
-                      <div className="h-32 mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg overflow-hidden group-hover:scale-105 transition-transform duration-300">
+                      <div className="h-32 mb-4 bg-muted rounded-lg overflow-hidden group-hover:scale-105 transition-transform duration-300">
                         <img 
                           src={option.image} 
                           alt={option.text}
@@ -410,10 +404,10 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
                         </div>
                       </div>
                       
-                      <div className="font-semibold text-gray-800 mb-1 group-hover:text-gray-900">
+                      <div className="font-semibold text-foreground mb-1 group-hover:text-foreground/80">
                         {option.text}
                       </div>
-                      <div className="text-sm text-gray-600 group-hover:text-gray-700">
+                      <div className="text-sm text-muted-foreground group-hover:text-foreground">
                         {option.style} Style
                       </div>
                     </button>
@@ -426,13 +420,13 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
                 <button
                   onClick={goBack}
                   disabled={currentStep === 0}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft size={20} />
                   Back
                 </button>
                 
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-muted-foreground">
                   {currentStep + 1} of {quizQuestions.length}
                 </div>
               </div>
@@ -441,12 +435,12 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
             <div className="text-center animate-fade-in">
               <div className={`inline-block p-8 rounded-3xl bg-gradient-to-r ${result?.color} text-white mb-6 shadow-lg`}>
                 <h4 className="text-2xl font-bold mb-2">Your Style Persona is:</h4>
-                <div className="text-3xl font-bold font-serif">{result?.persona}</div>
+                <div className="text-3xl font-bold font-display">{result?.persona}</div>
               </div>
               
               {/* Result Image Placeholder */}
               <div className="mb-6">
-                <div className="w-48 h-48 mx-auto bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
+                <div className="w-48 h-48 mx-auto bg-muted rounded-full flex items-center justify-center">
                   <div className="grid grid-cols-3 gap-1 w-24 h-24">
                     <div className="bg-gradient-to-br from-amber-200 to-rose-200 rounded"></div>
                     <div className="bg-gradient-to-br from-blue-200 to-purple-200 rounded"></div>
@@ -461,14 +455,14 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
                 </div>
               </div>
               
-              <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-lg mx-auto">
+              <p className="text-muted-foreground text-lg leading-relaxed mb-8 max-w-lg mx-auto">
                 {result?.description}
               </p>
               
               <div className="flex gap-4 justify-center">
                 <button 
                   onClick={resetQuiz}
-                  className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full font-semibold transition-colors"
+                  className="px-6 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-full font-semibold transition-colors"
                 >
                   Take Again
                 </button>
@@ -484,7 +478,7 @@ const FashionStyleQuiz = ({ isOpen, onClose }: FashionStyleQuizProps) => {
                     </>
                   ) : (
                     <>
-                      View My Lookbook
+                      Explore Products
                       <ChevronRight size={20} />
                     </>
                   )}

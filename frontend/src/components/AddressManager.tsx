@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { MapPin, Plus, Edit, Trash2, Check, X, Home, Building, Map } from 'lucide-react';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import { getStorageData, setStorageData, STORAGE_KEYS } from '../lib/storage';
 
 interface Address {
@@ -120,7 +120,7 @@ const AddressManager = ({
     switch (type) {
       case 'home': return 'text-blue-600 bg-blue-100';
       case 'work': return 'text-purple-600 bg-purple-100';
-      default: return 'text-gray-600 bg-gray-100';
+      default: return 'text-muted-foreground bg-muted';
     }
   };
 
@@ -129,14 +129,14 @@ const AddressManager = ({
       {/* Saved Addresses */}
       {addresses.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-700">Saved Addresses</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">Saved Addresses</h3>
           {addresses.map((address) => (
             <div
               key={address.id}
               className={`p-4 border rounded-lg transition-all ${
                 selectedAddress === address.address
                   ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  : 'border-border hover:border-border'
               }`}
             >
               <div className="flex items-start justify-between">
@@ -148,20 +148,20 @@ const AddressManager = ({
                     <div className={`p-1 rounded-full ${getTypeColor(address.type)}`}>
                       {getTypeIcon(address.type)}
                     </div>
-                    <span className="font-medium text-gray-900">{address.name}</span>
+                    <span className="font-medium text-foreground">{address.name}</span>
                     {address.isDefault && (
                       <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                         Default
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600">{address.address}</p>
+                  <p className="text-sm text-muted-foreground">{address.address}</p>
                 </div>
                 <div className="flex items-center gap-1 ml-4">
                   <button
                     type="button"
                     onClick={() => handleEditClick(address)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                    className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                     title="Edit address"
                   >
                     <Edit className="h-4 w-4" />
@@ -169,7 +169,7 @@ const AddressManager = ({
                   <button
                     type="button"
                     onClick={() => handleDeleteAddress(address.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                     title="Delete address"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -192,9 +192,9 @@ const AddressManager = ({
 
       {/* Add/Edit Address Form */}
       {(showAddForm || editingAddress) && (
-        <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 animate-fade-in">
+        <div className="p-4 border border-border rounded-lg bg-muted animate-fade-in">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-900">
+            <h3 className="font-medium text-foreground">
               {editingAddress ? `Edit Address: ${editingAddress.name}` : 'Add New Address'}
             </h3>
             <button
@@ -203,7 +203,7 @@ const AddressManager = ({
                 setEditingAddress(null);
                 setNewAddress({ name: '', type: 'home', address: '' });
               }}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-muted-foreground hover:text-muted-foreground"
             >
               <X className="h-5 w-5" />
             </button>
@@ -211,7 +211,7 @@ const AddressManager = ({
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Address Name
               </label>
               <input
@@ -219,19 +219,19 @@ const AddressManager = ({
                 value={newAddress.name}
                 onChange={(e) => setNewAddress({ ...newAddress, name: e.target.value })}
                 placeholder="e.g., Home, Work, Grandma's House"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 autoFocus={editingAddress ? true : false}
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Address Type
               </label>
               <select
                 value={newAddress.type}
                 onChange={(e) => setNewAddress({ ...newAddress, type: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="home">Home</option>
                 <option value="work">Work</option>
@@ -240,7 +240,7 @@ const AddressManager = ({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Address
               </label>
               <textarea
@@ -248,7 +248,7 @@ const AddressManager = ({
                 onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
                 placeholder="Enter the full address"
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             
@@ -266,7 +266,7 @@ const AddressManager = ({
                   setEditingAddress(null);
                   setNewAddress({ name: '', type: 'home', address: '' });
                 }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 border border-border text-muted-foreground rounded-md hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
@@ -279,7 +279,7 @@ const AddressManager = ({
       {!showAddForm && !editingAddress && (
         <button
           onClick={() => setShowAddForm(true)}
-          className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-800 transition-colors"
+          className="w-full p-4 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-gray-400 hover:text-foreground transition-colors"
         >
           <div className="flex items-center justify-center gap-2">
             <Plus className="h-5 w-5" />

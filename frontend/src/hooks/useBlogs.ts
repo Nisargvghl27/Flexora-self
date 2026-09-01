@@ -6,6 +6,9 @@ interface UseBlogsOptions {
   trending?: boolean;
   featured?: boolean;
   limit?: number;
+  search?: string;
+  tag?: string;
+  author?: string;
 }
 
 interface UseBlogsReturn {
@@ -29,7 +32,10 @@ export const useBlogs = (options: UseBlogsOptions = {}): UseBlogsReturn => {
         options.category,
         options.trending,
         options.featured,
-        options.limit
+        options.limit,
+        options.search,
+        options.tag,
+        options.author
       );
       
       if (response.error) {
@@ -48,7 +54,15 @@ export const useBlogs = (options: UseBlogsOptions = {}): UseBlogsReturn => {
 
   useEffect(() => {
     fetchBlogs();
-  }, [options.category, options.trending, options.featured, options.limit]);
+  }, [
+    options.category, 
+    options.trending, 
+    options.featured, 
+    options.limit,
+    options.search,
+    options.tag,
+    options.author
+  ]);
 
   return {
     blogs,

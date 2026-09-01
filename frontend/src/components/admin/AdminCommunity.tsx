@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Download, Trash2, Eye, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiService } from '../../services/api';
 
 const AdminCommunity = ({ token }) => {
   const [members, setMembers] = useState([]);
@@ -15,16 +16,12 @@ const AdminCommunity = ({ token }) => {
   const fetchMembers = async () => {
     try {
       setLoading(true);
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/admin/community/?search=${search}&page=${page}&limit=10`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch community members');
-      const data = await res.json();
-      setMembers(data.results);
-      setTotalPages(data.total_pages);
-      setTotal(data.total);
-    } catch (err) {
+      const res = await apiService.adminGet(`community/?search=${search}&page=${page}&limit=10`);
+      if (res.error) throw new Error(res.error);
+      setMembers(res.data?.results || []);
+      setTotalPages(res.data?.total_pages || 1);
+      setTotal(res.data?.total || 0);
+    } catch (err: any) {
       toast.error(err.message);
     } finally {
       setLoading(false);
@@ -36,12 +33,8 @@ const AdminCommunity = ({ token }) => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to remove this community member?')) return;
     try {
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/admin/community/${id}/`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to delete member');
+      const res = await apiService.adminDelete(`community/${id}/`);
+      if (res.error) throw new Error(res.error);
       toast.success('Member removed');
       setViewMember(null);
       fetchMembers();

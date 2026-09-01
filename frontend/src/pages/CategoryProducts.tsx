@@ -6,6 +6,8 @@ import Footer from '../components/Footer';
 import PageHero from '../components/PageHero';
 import { apiService, Product as ApiProduct } from '../services/api';
 import { Heart, Star, ShoppingBag, ArrowLeft, Loader2 } from 'lucide-react';
+import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from '../components/ui/breadcrumb';
+import { PageTransition } from '../components/PageTransition';
 
 const CategoryProducts = () => {
   const { category } = useParams<{ category: string }>();
@@ -27,7 +29,11 @@ const CategoryProducts = () => {
         if (response.error) {
           setError(response.error);
         } else if (response.data) {
-          setProducts(response.data);
+          if (Array.isArray(response.data)) {
+            setProducts(response.data);
+          } else {
+            setProducts(response.data.results);
+          }
         }
       } catch (err) {
         setError('Failed to fetch products');
@@ -89,7 +95,7 @@ const CategoryProducts = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <PageTransition>
       <Navigation />
       
       <main className="w-full">
@@ -100,16 +106,23 @@ const CategoryProducts = () => {
         />
 
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-border">
+        <section className="py-12 px-6">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Link to="/products" className="hover:text-primary flex items-center gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                All Products
-              </Link>
-              <span>/</span>
-              <span className="text-foreground">{categoryName}</span>
-            </div>
+            <Breadcrumb className="mb-8">
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/">Home</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/categories">Categories</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{categoryName}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
           </div>
         </section>
 
@@ -250,7 +263,7 @@ const CategoryProducts = () => {
       </main>
 
       <Footer />
-    </div>
+    </PageTransition>
   );
 };
 

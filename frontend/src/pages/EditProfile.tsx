@@ -1,13 +1,15 @@
 import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/card';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '../components/ui/skeleton';
 import { Upload, X, User, Users, UserCheck, UserPlus, UserX, UserMinus } from 'lucide-react';
 import Suggestions from '../components/Suggestions';
 import AddressManager from '../components/AddressManager';
+import { toast } from 'sonner';
+import { apiService } from '../services/api';
 
 const EditProfile = () => {
   const { user, login } = useAuth();
@@ -21,10 +23,8 @@ const EditProfile = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
   const [profilePicturePreview, setProfilePicturePreview] = useState<string>('');
@@ -35,22 +35,22 @@ const EditProfile = () => {
 
   // Default avatar options - Beautiful cartoon and modern avatars
   const defaultAvatars = [
-    { id: 'avatar1', emoji: '😊', color: 'bg-gradient-to-br from-blue-400 to-blue-600', name: 'Happy' },
-    { id: 'avatar2', emoji: '🤖', color: 'bg-gradient-to-br from-purple-400 to-purple-600', name: 'Robot' },
-    { id: 'avatar3', emoji: '🦄', color: 'bg-gradient-to-br from-pink-400 to-pink-600', name: 'Unicorn' },
-    { id: 'avatar4', emoji: '🐱', color: 'bg-gradient-to-br from-orange-400 to-orange-600', name: 'Cat' },
-    { id: 'avatar5', emoji: '🦁', color: 'bg-gradient-to-br from-yellow-400 to-yellow-600', name: 'Lion' },
-    { id: 'avatar6', emoji: '🐼', color: 'bg-gradient-to-br from-gray-400 to-gray-600', name: 'Panda' },
-    { id: 'avatar7', emoji: '🦊', color: 'bg-gradient-to-br from-red-400 to-red-600', name: 'Fox' },
-    { id: 'avatar8', emoji: '🐸', color: 'bg-gradient-to-br from-green-400 to-green-600', name: 'Frog' },
-    { id: 'avatar9', emoji: '🐙', color: 'bg-gradient-to-br from-indigo-400 to-indigo-600', name: 'Octopus' },
-    { id: 'avatar10', emoji: '🦋', color: 'bg-gradient-to-br from-teal-400 to-teal-600', name: 'Butterfly' },
-    { id: 'avatar11', emoji: '🦅', color: 'bg-gradient-to-br from-sky-400 to-sky-600', name: 'Eagle' },
-    { id: 'avatar12', emoji: '🐬', color: 'bg-gradient-to-br from-cyan-400 to-cyan-600', name: 'Dolphin' },
-    { id: 'avatar13', emoji: '🦕', color: 'bg-gradient-to-br from-emerald-400 to-emerald-600', name: 'Dinosaur' },
-    { id: 'avatar14', emoji: '🦒', color: 'bg-gradient-to-br from-amber-400 to-amber-600', name: 'Giraffe' },
-    { id: 'avatar15', emoji: '🦘', color: 'bg-gradient-to-br from-rose-400 to-rose-600', name: 'Kangaroo' },
-    { id: 'avatar16', emoji: '🦥', color: 'bg-gradient-to-br from-lime-400 to-lime-600', name: 'Sloth' },
+    { id: 'avatar1', emoji: 'ðŸ˜Š', color: 'bg-gradient-to-br from-blue-400 to-blue-600', name: 'Happy' },
+    { id: 'avatar2', emoji: 'ðŸ¤–', color: 'bg-gradient-to-br from-purple-400 to-purple-600', name: 'Robot' },
+    { id: 'avatar3', emoji: 'ðŸ¦„', color: 'bg-gradient-to-br from-pink-400 to-pink-600', name: 'Unicorn' },
+    { id: 'avatar4', emoji: 'ðŸ±', color: 'bg-gradient-to-br from-orange-400 to-orange-600', name: 'Cat' },
+    { id: 'avatar5', emoji: 'ðŸ¦', color: 'bg-gradient-to-br from-yellow-400 to-yellow-600', name: 'Lion' },
+    { id: 'avatar6', emoji: 'ðŸ¼', color: 'bg-gradient-to-br from-gray-400 to-gray-600', name: 'Panda' },
+    { id: 'avatar7', emoji: 'ðŸ¦Š', color: 'bg-gradient-to-br from-red-400 to-red-600', name: 'Fox' },
+    { id: 'avatar8', emoji: 'ðŸ¸', color: 'bg-gradient-to-br from-green-400 to-green-600', name: 'Frog' },
+    { id: 'avatar9', emoji: 'ðŸ™', color: 'bg-gradient-to-br from-indigo-400 to-indigo-600', name: 'Octopus' },
+    { id: 'avatar10', emoji: 'ðŸ¦‹', color: 'bg-gradient-to-br from-teal-400 to-teal-600', name: 'Butterfly' },
+    { id: 'avatar11', emoji: 'ðŸ¦…', color: 'bg-gradient-to-br from-sky-400 to-sky-600', name: 'Eagle' },
+    { id: 'avatar12', emoji: 'ðŸ¬', color: 'bg-gradient-to-br from-cyan-400 to-cyan-600', name: 'Dolphin' },
+    { id: 'avatar13', emoji: 'ðŸ¦•', color: 'bg-gradient-to-br from-emerald-400 to-emerald-600', name: 'Dinosaur' },
+    { id: 'avatar14', emoji: 'ðŸ¦’', color: 'bg-gradient-to-br from-amber-400 to-amber-600', name: 'Giraffe' },
+    { id: 'avatar15', emoji: 'ðŸ¦˜', color: 'bg-gradient-to-br from-rose-400 to-rose-600', name: 'Kangaroo' },
+    { id: 'avatar16', emoji: 'ðŸ¦¥', color: 'bg-gradient-to-br from-lime-400 to-lime-600', name: 'Sloth' },
   ];
 
   // Account type options
@@ -73,15 +73,9 @@ const EditProfile = () => {
       setLoading(true);
       setError('');
       try {
-        const token = localStorage.getItem('accessToken');
-        const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-        const res = await fetch(`${baseURL}/api/profile/`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error('Failed to fetch profile');
-        const text = await res.text();
-        let data: any = {};
-        try { if (text) data = JSON.parse(text); } catch (_) {}
+        const res = await apiService.getProfile();
+        if (res.error) throw new Error(res.error);
+        const data = res.data || {};
         setForm({
           username: data.username || '',
           email: data.email || '',
@@ -106,7 +100,6 @@ const EditProfile = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
     setError('');
-    setSuccess('');
   };
 
   const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,9 +137,7 @@ const EditProfile = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setSuccess('');
     try {
-      const token = localStorage.getItem('accessToken');
       const formData = new FormData();
       formData.append('username', form.username);
       formData.append('email', form.email);
@@ -161,19 +152,10 @@ const EditProfile = () => {
       if (form.accountType) {
         formData.append('account_type', form.accountType);
       }
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/profile/`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        let data: any = {};
-        try { if (text) data = JSON.parse(text); } catch (_) {}
-        throw new Error(data.error || 'Failed to update profile');
+      
+      const res = await apiService.updateProfile(formData);
+      if (res.error) {
+        throw new Error(res.error || 'Failed to update profile');
       }
       // Update AuthContext and localStorage if username changed
       if (form.username && form.username !== user.username) {
@@ -181,7 +163,7 @@ const EditProfile = () => {
         const refreshToken = localStorage.getItem('refreshToken');
         login(form.username, accessToken, refreshToken);
       }
-      setSuccess('Profile updated successfully!');
+      toast.success('Profile updated successfully!');
       
       // Dispatch custom event to update navbar profile picture
       window.dispatchEvent(new CustomEvent('profile-updated'));
@@ -196,29 +178,15 @@ const EditProfile = () => {
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPasswordForm({ ...passwordForm, [e.target.name]: e.target.value });
     setPasswordError('');
-    setPasswordSuccess('');
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
-    setPasswordSuccess('');
     try {
-      const token = localStorage.getItem('accessToken');
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/change-password/`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(passwordForm),
-      });
-      const text = await res.text();
-      let data: any = {};
-      try { if (text) data = JSON.parse(text); } catch (_) {}
-      if (!res.ok) throw new Error(data.error || 'Failed to change password');
-      setPasswordSuccess('Password changed successfully!');
+      const res = await apiService.changePassword(passwordForm);
+      if (res.error) throw new Error(res.error || 'Failed to change password');
+      toast.success('Password changed successfully!');
       setPasswordForm({ current_password: '', new_password: '', confirm_password: '' });
     } catch (err: any) {
       setPasswordError(err.message || 'Error changing password');
@@ -426,7 +394,7 @@ const EditProfile = () => {
                   <select
                     id="accountType"
                     value={form.accountType}
-                    onChange={(e) => { setForm({ ...form, accountType: e.target.value }); setError(''); setSuccess(''); }}
+                    onChange={(e) => { setForm({ ...form, accountType: e.target.value }); setError(''); }}
                     className="w-full px-4 py-2 border border-border rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     {accountTypes.map((type) => (
@@ -438,7 +406,6 @@ const EditProfile = () => {
                   <p className="text-xs text-muted-foreground mt-1">This helps us personalize your experience</p>
                 </div>
                 {error && <div className="text-red-500 text-sm text-center">{error}</div>}
-                {success && <div className="text-green-600 text-sm text-center">{success}</div>}
                 <button
                   type="submit"
                   className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
@@ -497,7 +464,6 @@ const EditProfile = () => {
                     />
                   </div>
                   {passwordError && <div className="text-red-500 text-sm text-center">{passwordError}</div>}
-                  {passwordSuccess && <div className="text-green-600 text-sm text-center">{passwordSuccess}</div>}
                   <div className="flex gap-4">
                     <button
                       type="submit"

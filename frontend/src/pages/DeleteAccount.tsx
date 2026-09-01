@@ -1,11 +1,12 @@
 import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/card';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiService } from '../services/api';
 
 const DeleteAccount = () => {
   const { user, logout } = useAuth();
@@ -25,23 +26,10 @@ const DeleteAccount = () => {
     setError('');
     
     try {
-      const token = localStorage.getItem('accessToken');
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/delete-account/`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ password }),
-      });
+      const res = await apiService.deleteAccount(password);
       
-      const text = await res.text();
-      let data: any = {};
-      try { if (text) data = JSON.parse(text); } catch (_) {}
-      
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to delete account');
+      if (res.error) {
+        throw new Error(res.error || 'Failed to delete account');
       }
       
       toast.success('Account deleted successfully');

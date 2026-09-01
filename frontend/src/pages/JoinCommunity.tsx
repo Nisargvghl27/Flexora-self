@@ -1,4 +1,6 @@
 import Navigation from '../components/Navigation';
+import { PageTransition } from '../components/PageTransition';
+import { apiService } from '../services/api';
 import Footer from '../components/Footer';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -7,7 +9,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Checkbox } from '../components/ui/checkbox';
 import { Button } from '../components/ui/button';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
@@ -70,62 +72,48 @@ const JoinCommunity = () => {
 
   // Fetch user profile data and check membership status
   useEffect(() => {
-    if (!user) return;
-
-    const fetchUserData = async () => {
+    const checkMembership = async () => {
+      if (!user) return;
       setLoadingProfile(true);
+      
       try {
-        const token = localStorage.getItem('accessToken');
+        const profileResponse = await apiService.getProfile();
         
-        // Fetch user profile
-        const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-        const profileResponse = await fetch(`${baseURL}/api/profile/`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (profileResponse.ok) {
-          const text = await profileResponse.text();
-          let profileData: any = {};
-          try { if (text) profileData = JSON.parse(text); } catch (_) {}
-          setUserProfile(profileData);
-          
-          // Auto-fill form with user data
+        let userEmail = user.email;
+        if (!profileResponse.error && profileResponse.data) {
+          if (profileResponse.data.email) {
+            userEmail = profileResponse.data.email;
+          }
+          // Set initial form data
+          setUserProfile(profileResponse.data);
           setFormData(prev => ({
             ...prev,
-            name: profileData.username || '',
-            email: profileData.email || '',
-            phone: profileData.phone || ''
+            name: profileResponse.data.username || user.username || '',
+            email: userEmail || '',
+            phone: profileResponse.data.phone || ''
           }));
         }
-        
-        // Check if user is already a community member
-        
-        const membershipResponse = await fetch(`${baseURL}/api/join-community/`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (membershipResponse.ok) {
-          const text = await membershipResponse.text();
-          let membershipData: any = {};
-          try { if (text) membershipData = JSON.parse(text); } catch (_) {}
-          if (membershipData.is_member) {
-            setIsAlreadyMember(true);
-            setMemberData(membershipData.member);
-          }
+
+        if (!userEmail) {
+          setLoadingProfile(false);
+          return;
         }
+
+        const membershipResponse = await apiService.joinCommunity();
         
-      } catch (err) {
-        console.error('Error fetching user data:', err);
+        if (!membershipResponse.error && membershipResponse.data?.is_community_member) {
+          setIsAlreadyMember(true);
+          setMemberData(membershipResponse.data.member);
+        } else {
+        }
+      } catch (error) {
+        console.error('Error checking membership:', error);
       } finally {
         setLoadingProfile(false);
       }
     };
 
-    fetchUserData();
+    checkMembership();
   }, [user]);
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -148,40 +136,13 @@ const JoinCommunity = () => {
     }
 
     try {
-      const token = localStorage.getItem('accessToken');
-      console.log('Submitting form data:', formData);
-      console.log('Using token:', token ? 'Token exists' : 'No token');
-      console.log('Current user:', user);
-      
-      if (!token) {
-        setError('Authentication token not found. Please log in again.');
-        setLoading(false);
-        return;
-      }
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const response = await fetch(`${baseURL}/api/join-community/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
+      const response = await apiService.joinCommunity(formData);
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
-      const text = await response.text();
-      let data: any = {};
-      try { if (text) data = JSON.parse(text); } catch (_) {}
-      console.log('Response data:', data);
-
-      if (response.ok) {
+      if (!response.error) {
         setSuccess(true);
-        console.log('Successfully joined community:', data);
       } else {
-        console.error('API Error:', data);
-        setError(data.error || data.details || 'Failed to join community. Please try again.');
+        console.error('API Error:', response.rawErrorData);
+        setError(response.error || response.rawErrorData?.details || 'Failed to join community. Please try again.');
       }
     } catch (err) {
       console.error('Network Error:', err);
@@ -227,7 +188,7 @@ const JoinCommunity = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-center py-12">
-                  <div className="text-green-600 text-6xl mb-4">✓</div>
+                  <div className="text-green-600 text-6xl mb-4">âœ“</div>
                   <h3 className="text-xl font-semibold text-foreground mb-4">Community Member</h3>
                   
                   <div className="bg-green-50 rounded-lg p-6 mb-6">
@@ -298,7 +259,7 @@ const JoinCommunity = () => {
             <CardContent>
               {success ? (
                 <div className="text-center py-12">
-                  <div className="text-green-600 text-6xl mb-4">✓</div>
+                  <div className="text-green-600 text-6xl mb-4">âœ“</div>
                   <h3 className="text-xl font-semibold text-foreground mb-2">Welcome to Flexora!</h3>
                   <p className="text-muted-foreground">
                     Thank you for joining our community. We'll be in touch soon with exciting updates and opportunities.
@@ -328,7 +289,7 @@ const JoinCommunity = () => {
                         onChange={e => handleInputChange('email', e.target.value)}
                         placeholder="your.email@example.com"
                         required
-                        className="bg-gray-50"
+                        className="bg-muted"
                       />
                       <p className="text-xs text-muted-foreground">Pre-filled from your profile</p>
                     </div>
@@ -343,7 +304,7 @@ const JoinCommunity = () => {
                         value={formData.phone}
                         onChange={e => handleInputChange('phone', e.target.value)}
                         placeholder="+1 (555) 123-4567"
-                        className="bg-gray-50"
+                        className="bg-muted"
                       />
                       <p className="text-xs text-muted-foreground">Pre-filled from your profile</p>
                     </div>

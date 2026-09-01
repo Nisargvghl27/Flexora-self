@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { apiService } from '../services/api';
 
 interface Product {
   id: number;
@@ -60,15 +61,11 @@ const TrendSwipePopup = ({ persona, products, isOpen, onClose, onComplete }: Tre
     const direction = lastSwipedDirection.current;
     // POST feedback
     try {
-      await fetch('/api/swipe-feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productId: product.id,
-          direction,
-          persona,
-          timestamp: new Date().toISOString(),
-        }),
+      await apiService.submitSwipeFeedback({
+        productId: product.id,
+        direction,
+        persona,
+        timestamp: new Date().toISOString(),
       });
     } catch (e) {}
     if (direction === 'right') {

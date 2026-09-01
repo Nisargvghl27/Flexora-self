@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Search, Edit, Trash2, Plus, X, Star, Eye, MessageSquare, Heart, Activity } from 'lucide-react';
+import { Search, Edit, Trash2, Plus, X, Star, Eye, MessageSquare, Heart, Activity, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { apiService } from '../../services/api';
 
 const CATEGORIES = ['General', 'Style Guide', 'Trend Report', 'News', 'Lifestyle'];
 
@@ -22,15 +24,11 @@ const AdminBlogs = ({ token }) => {
   const fetchBlogs = async () => {
     try {
       setLoading(true);
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/admin/blogs/?search=${search}&category=${category}&status=${status}&page=${page}&limit=10`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch blogs');
-      const data = await res.json();
-      setBlogs(data.results);
-      setTotalPages(data.total_pages);
-    } catch (err) {
+      const res = await apiService.adminGet(`blogs/?search=${search}&category=${category}&status=${status}&page=${page}&limit=10`);
+      if (res.error) throw new Error(res.error);
+      setBlogs(res.data?.results || res.data || []);
+      setTotalPages(res.data?.total_pages || 1);
+    } catch (err: any) {
       toast.error(err.message);
     } finally {
       setLoading(false);
@@ -42,12 +40,8 @@ const AdminBlogs = ({ token }) => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this blog?')) return;
     try {
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/admin/blogs/${id}/`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to delete');
+      const res = await apiService.adminDelete(`blogs/${id}/`);
+      if (res.error) throw new Error(res.error);
       toast.success('Blog deleted');
       fetchBlogs();
     } catch (err) {
@@ -57,13 +51,8 @@ const AdminBlogs = ({ token }) => {
 
   const handleToggle = async (id, field, value) => {
     try {
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/admin/blogs/${id}/`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: value })
-      });
-      if (!res.ok) throw new Error('Failed to update');
+      const res = await apiService.adminPut(`blogs/${id}/`, { [field]: value });
+      if (res.error) throw new Error(res.error);
       toast.success('Updated successfully');
       fetchBlogs(); // Refetch to get updated timestamp if needed
     } catch (err) {
@@ -74,13 +63,8 @@ const AdminBlogs = ({ token }) => {
   const handleBulkAction = async (action) => {
     if (selectedIds.length === 0) return;
     try {
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${baseURL}/api/admin/blogs/bulk-action/`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: selectedIds, action })
-      });
-      if (!res.ok) throw new Error('Bulk action failed');
+      const res = await apiService.adminPut(`blogs/bulk-action/`, { ids: selectedIds, action });
+      if (res.error) throw new Error(res.error);
       toast.success('Action applied successfully');
       setSelectedIds([]);
       fetchBlogs();
@@ -92,20 +76,16 @@ const AdminBlogs = ({ token }) => {
   const handleModalSubmit = async (e) => {
     e.preventDefault();
     try {
-      const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
       const url = modalMode === 'create' 
-        ? `${baseURL}/api/admin/blogs/`
-        : `${baseURL}/api/admin/blogs/${formData.id}/`;
+        ? `blogs/`
+        : `blogs/${formData.id}/`;
       
-      const res = await fetch(url, {
-        method: modalMode === 'create' ? 'POST' : 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+      const res = modalMode === 'create' 
+        ? await apiService.adminPost(url, formData)
+        : await apiService.adminPut(url, formData);
       
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to save');
+      if (res.error) {
+        throw new Error(res.error || 'Failed to save');
       }
       
       toast.success(`Blog ${modalMode === 'create' ? 'created' : 'updated'} successfully`);
@@ -147,7 +127,7 @@ const AdminBlogs = ({ token }) => {
           >
             <option value="">All Statuses</option>
             <option value="published">Published</option>
-            <option value="unpublished">Draft</option>
+            <option value="unpublished">Pending Review (Draft)</option>
           </select>
         </div>
         <button onClick={openCreate} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap">
@@ -209,9 +189,15 @@ const AdminBlogs = ({ token }) => {
                   </div>
                 </td>
                 <td className="py-3 px-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => { setFormData(b); setModalMode('edit'); setIsModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(b.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                  <div className="flex justify-end gap-2 items-center">
+                    {!b.is_published && (
+                      <button onClick={() => handleToggle(b.id, 'is_published', true)} className="px-2 py-1 bg-green-50 text-green-600 hover:bg-green-100 rounded text-xs font-medium" title="Approve & Publish">Approve</button>
+                    )}
+                    <Link to={`/trending/${b.slug}`} target="_blank" className="p-1.5 text-gray-600 hover:bg-gray-100 rounded" title="View Blog">
+                      <ExternalLink className="w-4 h-4" />
+                    </Link>
+                    <button onClick={() => { setFormData(b); setModalMode('edit'); setIsModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Edit Blog"><Edit className="w-4 h-4" /></button>
+                    <button onClick={() => handleDelete(b.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Reject / Delete Blog"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </td>
               </tr>

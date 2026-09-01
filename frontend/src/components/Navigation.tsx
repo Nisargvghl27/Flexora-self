@@ -1,21 +1,47 @@
 
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Heart, X, ShoppingCart } from 'lucide-react';
+import { Heart, X, ShoppingCart, Bell, Sun, Moon, Search } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
 import { User, Users, UserCheck, UserPlus, UserX, UserMinus } from 'lucide-react';
-import { useAuth } from '../App';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from 'next-themes';
 import { getStorageData, STORAGE_KEYS } from '../lib/storage';
+import { apiService } from '../services/api';
+import { useProfile } from '../hooks/useProfile';
+import { useCartCount } from '../hooks/useCartCount';
+import { useProducts } from '../hooks/useProducts';
+import { formatPrice } from '../lib/utils';
 
 const Navigation = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { products: searchResults, loading: searchLoading } = useProducts(undefined, undefined, debouncedQuery, undefined, 1, 4);
   const { user, logout } = useAuth();
-  const [cartCount, setCartCount] = useState(0);
-  const [lookbookPersona, setLookbookPersona] = useState<string | null>(null);
-  const [profilePicture, setProfilePicture] = useState<string>('');
-  const [selectedAvatar, setSelectedAvatar] = useState<string>('');
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { cartCount } = useCartCount();
+  const { theme, setTheme } = useTheme();
+  
+  const { profile, refetchProfile } = useProfile();
+  
+  const profilePicture = profile?.profile_picture || '';
+  const selectedAvatar = profile?.selected_avatar || '';
+  const isAdmin = profile?.is_staff || profile?.is_superuser || false;
+
+  // Notifications state
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Default avatar options
   const defaultAvatars = [
@@ -37,149 +63,103 @@ const Navigation = () => {
     { id: 'avatar16', emoji: '🦥', color: 'bg-gradient-to-br from-lime-400 to-lime-600', name: 'Sloth' },
   ];
 
-  useEffect(() => {
-    const updateCartCount = () => {
-      if (!user?.username) return;
-      
-      const cart = getStorageData(STORAGE_KEYS.CART, user.username, []);
-      setCartCount(cart.reduce((sum, item) => sum + (item.quantity || 1), 0));
-    };
-    updateCartCount();
-    window.addEventListener('storage', updateCartCount);
-    window.addEventListener('cart-updated', updateCartCount);
-    return () => {
-      window.removeEventListener('storage', updateCartCount);
-      window.removeEventListener('cart-updated', updateCartCount);
-    };
-  }, [user?.username]);
+  // Fetch profile is now handled by useProfile hook
 
-  // Fetch profile picture when user is logged in
+  // Fetch Notifications
   useEffect(() => {
-    const fetchProfilePicture = async () => {
+    const fetchNotifications = async () => {
       if (user) {
         try {
-          const token = localStorage.getItem('accessToken');
-          if (!token) {
-            console.log('No access token found');
-            return;
+          const unreadRes = await apiService.getUnreadNotificationCount();
+          if (!unreadRes.error && unreadRes.data) {
+            setUnreadCount(unreadRes.data.unread_count || 0);
           }
-          
-          const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-          const res = await fetch(`${baseURL}/api/profile/`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-          
-          if (res.ok) {
-            const text = await res.text();
-            let data: any = {};
-            try { if (text) data = JSON.parse(text); } catch (_) {}
-            console.log('Profile data received:', data);
-            if (data.profile_picture) {
-              console.log('Setting profile picture:', data.profile_picture);
-              setProfilePicture(data.profile_picture);
-            } else {
-              console.log('No profile picture found in response');
-              setProfilePicture('');
-            }
-            if (data.selected_avatar) {
-              setSelectedAvatar(data.selected_avatar);
-            } else {
-              setSelectedAvatar('');
-            }
-            if (data.is_staff || data.is_superuser) {
-              setIsAdmin(true);
-            } else {
-              setIsAdmin(false);
-            }
-          } else {
-            console.error('Failed to fetch profile:', res.status);
-            setProfilePicture('');
+
+          const notifRes = await apiService.getNotifications(5);
+          if (!notifRes.error && notifRes.data) {
+            setNotifications(notifRes.data.results || notifRes.data || []);
           }
-        } catch (error) {
-          console.error('Error fetching profile picture:', error);
-          setProfilePicture('');
+        } catch (e) {
+          console.error('Failed to fetch notifications', e);
         }
-      } else {
-        setProfilePicture('');
       }
     };
-
-    fetchProfilePicture();
+    fetchNotifications();
+    
+    // Poll every 30 seconds
+    const intervalId = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(intervalId);
   }, [user]);
 
-  // Debug: Log current profile picture state
-  useEffect(() => {
-    console.log('Current profile picture state:', profilePicture);
-  }, [profilePicture]);
+  const markAsRead = async (id: number) => {
+    try {
+      await apiService.markNotificationRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (e) {
+      console.error('Failed to mark notification as read', e);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await apiService.markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+      setUnreadCount(0);
+    } catch (e) {
+      console.error('Failed to mark all as read', e);
+    }
+  };
 
   // Listen for profile updates
   useEffect(() => {
     const handleProfileUpdate = () => {
-      if (user) {
-        // Refetch profile picture when profile is updated
-        const fetchProfilePicture = async () => {
-          try {
-            const token = localStorage.getItem('accessToken');
-            if (!token) return;
-            const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-            const res = await fetch(`${baseURL}/api/profile/`, {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-              },
-            });
-            
-            if (res.ok) {
-              const text = await res.text();
-              let data: any = {};
-              try { if (text) data = JSON.parse(text); } catch (_) {}
-              if (data.profile_picture) {
-                setProfilePicture(data.profile_picture);
-              }
-              if (data.is_staff || data.is_superuser) {
-                setIsAdmin(true);
-              } else {
-                setIsAdmin(false);
-              }
-            }
-          } catch (error) {
-            console.error('Error refetching profile picture:', error);
-          }
-        };
-        
-        fetchProfilePicture();
-      }
+      refetchProfile();
     };
 
-    // Listen for custom event when profile is updated
     window.addEventListener('profile-updated', handleProfileUpdate);
     
     return () => {
       window.removeEventListener('profile-updated', handleProfileUpdate);
     };
-  }, [user]);
+  }, [refetchProfile]);
 
-  // Lookbook persona from localStorage
+  // Handle Escape key to close search
   useEffect(() => {
-    setLookbookPersona(localStorage.getItem('flexora-last-persona'));
-    const onStorage = () => setLookbookPersona(localStorage.getItem('flexora-last-persona'));
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+      }
+    };
+    if (isSearchOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSearchOpen]);
 
   const navItems = [
     { name: 'Home', path: '/' },
-    { name: 'Trending', path: '/trending-looks' },
-    { name: 'Categories', path: '/style-categories' },
-    { name: 'Spotlights', path: '/student-spotlights' },
     { name: 'Collections', path: '/collections' },
     { name: 'Products', path: '/products' },
+    { name: 'Community', path: '/community' },
+    { name: 'Designs', path: '/designs' },
   ];
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      setIsSearchOpen(false);
+      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
   return (
-    <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary font-medium">
+        Skip to main content
+      </a>
+      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border transition-all duration-300" aria-label="Main Navigation">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo Section */}
           <div className="flex items-center gap-3">
@@ -221,41 +201,69 @@ const Navigation = () => {
                 </NavLink>
               ))}
 
-              {/* Lookbook Button */}
-              {lookbookPersona ? (
-                <NavLink
-                  to={`/lookbook/${lookbookPersona}`}
-                  className={({ isActive }) =>
-                    `px-3 py-2 rounded-md text-sm font-semibold transition-colors duration-200 flex items-center gap-1 ${
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-accent-foreground hover:text-primary hover:bg-accent'
-                    }`
-                  }
+              {/* Theme Toggle, Notifications, Favorites, Cart */}
+              <div className="flex items-center gap-2 align-middle h-full">
+                
+                {/* Search Toggle */}
+                <button
+                  onClick={() => setIsSearchOpen(true)}
+                  className="flex items-center justify-center p-2 min-w-[44px] min-h-[44px] rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200"
+                  aria-label="Search"
                 >
-                  <span role="img" aria-label="lookbook">✨</span> Your Lookbook
-                </NavLink>
-              ) : (
-                <NavLink
-                  to="/quiz"
-                  className={({ isActive }) =>
-                    `px-3 py-2 rounded-md text-sm font-semibold transition-colors duration-200 flex items-center gap-1 ${
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-accent-foreground hover:text-primary hover:bg-accent'
-                    }`
-                  }
-                >
-                  <span role="img" aria-label="quiz">📝</span> Take the Quiz
-                </NavLink>
-              )}
+                  <Search className="w-5 h-5" />
+                </button>
 
-              {/* Favorites Heart Icon */}
-              <div className="flex items-center gap-4 align-middle h-full">
+                {/* Theme Toggle */}
+                <button
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="flex items-center justify-center p-2 min-w-[44px] min-h-[44px] rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200"
+                  aria-label="Toggle Theme"
+                >
+                  {theme === 'dark' ? <Sun className="w-5 h-5 animate-in spin-in-180" /> : <Moon className="w-5 h-5 animate-in spin-in-90" />}
+                </button>
+
+                {/* Notifications Bell (Only if logged in) */}
+                {user && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="relative flex items-center justify-center p-2 min-w-[44px] min-h-[44px] rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200" aria-label="Notifications">
+                        <Bell className="w-5 h-5" />
+                        {unreadCount > 0 && (
+                          <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-80">
+                      <div className="flex justify-between items-center px-4 py-2 border-b">
+                        <span className="font-bold">Notifications</span>
+                        {unreadCount > 0 && (
+                          <button onClick={markAllAsRead} className="text-xs text-primary hover:underline">
+                            Mark all as read
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto">
+                        {notifications.length > 0 ? (
+                          notifications.map((notif) => (
+                            <DropdownMenuItem key={notif.id} className={`flex flex-col items-start p-3 border-b cursor-pointer ${notif.is_read ? 'opacity-60' : 'bg-primary/5'}`} onClick={() => markAsRead(notif.id)}>
+                              <span className="font-semibold text-sm">{notif.title}</span>
+                              <span className="text-xs text-muted-foreground mt-1 line-clamp-2">{notif.message}</span>
+                            </DropdownMenuItem>
+                          ))
+                        ) : (
+                          <div className="p-4 text-center text-sm text-muted-foreground">No notifications</div>
+                        )}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
                 <NavLink
                   to="/favorites"
                   className={({ isActive }) =>
-                    `flex items-center justify-center p-2 rounded-md transition-colors duration-200 ${
+                    `flex items-center justify-center p-2 min-w-[44px] min-h-[44px] rounded-md transition-colors duration-200 ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -268,7 +276,7 @@ const Navigation = () => {
                 <NavLink
                   to="/cart"
                   className={({ isActive }) =>
-                    `relative flex items-center justify-center p-2 rounded-md transition-colors duration-200 ${
+                    `relative flex items-center justify-center p-2 min-w-[44px] min-h-[44px] rounded-md transition-colors duration-200 ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -277,7 +285,7 @@ const Navigation = () => {
                   aria-label="Cart"
                 >
                   <ShoppingCart className="w-5 h-5" />
-                  {cartCount > 0 && (
+                  {user && cartCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center border border-background shadow">
                       {cartCount}
                     </span>
@@ -294,10 +302,8 @@ const Navigation = () => {
                         alt={user?.username}
                         onError={(e) => {
                           console.error('Failed to load profile picture:', profilePicture);
-                          setProfilePicture('');
                         }}
                         onLoad={() => {
-                          console.log('Profile picture loaded successfully:', profilePicture);
                         }}
                         className="object-cover w-full h-full"
                       />
@@ -349,8 +355,9 @@ const Navigation = () => {
           <div className="md:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent focus:outline-none"
-              aria-expanded="false"
+              className="inline-flex items-center justify-center p-2 min-w-[44px] min-h-[44px] rounded-md text-muted-foreground hover:text-foreground hover:bg-accent focus:outline-none"
+              aria-expanded={isMobileMenuOpen}
+              aria-label="Main menu"
             >
               <span className="sr-only">Open main menu</span>
               {isMobileMenuOpen ? (
@@ -380,6 +387,18 @@ const Navigation = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden border-t border-border">
           <div className="px-2 pt-2 pb-3 space-y-1 bg-background/95 backdrop-blur-sm">
+            <div className="px-3 py-2">
+              <form onSubmit={handleSearch} className="relative">
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-accent text-foreground rounded-lg pl-10 pr-4 py-2 border-none focus:ring-2 focus:ring-primary"
+                />
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+              </form>
+            </div>
             {navItems.map((item) => (
               <NavLink
                 key={item.name}
@@ -396,131 +415,110 @@ const Navigation = () => {
                 {item.name}
               </NavLink>
             ))}
-            {/* Lookbook Button Mobile */}
-            {lookbookPersona ? (
+            {/* Admin Panel Link for Mobile */}
+            {isAdmin && (
               <NavLink
-                to={`/lookbook/${lookbookPersona}`}
+                to="/admin"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) =>
-                  `block px-3 py-2 rounded-md text-base font-semibold transition-colors duration-200 flex items-center gap-1 ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-accent-foreground hover:text-primary hover:bg-accent'
-                  }`
+                  `block px-3 py-2 rounded-md text-base font-semibold transition-colors duration-200 flex items-center gap-1 text-primary`
                 }
               >
-                <span role="img" aria-label="lookbook">✨</span> Your Lookbook
-              </NavLink>
-            ) : (
-              <NavLink
-                to="/quiz"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `block px-3 py-2 rounded-md text-base font-semibold transition-colors duration-200 flex items-center gap-1 ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-accent-foreground hover:text-primary hover:bg-accent'
-                  }`
-                }
-              >
-                <span role="img" aria-label="quiz">📝</span> Take the Quiz
+                Admin Panel
               </NavLink>
             )}
-            {/* Mobile Favorites and Cart Links */}
-            <div className="flex items-center gap-2">
-              <NavLink
-                to="/favorites"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  }`
-                }
-                aria-label="Favorites"
-              >
-                <Heart className="w-5 h-5" />
-                Favorites
-              </NavLink>
-              <NavLink
-                to="/cart"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  }`
-                }
-                aria-label="Cart"
-              >
-                <ShoppingCart className="w-5 h-5" />
-                Cart
-              </NavLink>
+          </div>
+        </div>
+      )}
+
+      {/* Global Search Overlay */}
+      {isSearchOpen && (
+        <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm animate-fade-in flex flex-col items-center pt-32 px-4">
+          <button 
+            onClick={() => setIsSearchOpen(false)}
+            className="absolute top-6 right-6 p-2 rounded-full bg-accent text-foreground hover:bg-primary/20 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          
+          <div className="w-full max-w-3xl animate-scale-in">
+            <h2 className="text-3xl font-display font-bold mb-6 text-center">What are you looking for?</h2>
+            <form onSubmit={handleSearch} className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-6 w-6 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              </div>
+              <input
+                type="text"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="block w-full pl-14 pr-4 py-4 md:text-xl border-b-2 border-border bg-transparent focus:border-primary outline-none transition-colors"
+                placeholder="Search for dresses, tops, collections..."
+              />
+            </form>
+            
+            <div className="mt-8 flex flex-wrap gap-2 justify-center text-sm">
+              <span className="text-muted-foreground mt-1">Popular:</span>
+              {['Summer Collection', 'Dresses', 'Activewear', 'Accessories'].map(term => (
+                <button 
+                  key={term}
+                  onClick={() => {
+                    setSearchQuery(term);
+                    navigate(`/products?search=${encodeURIComponent(term)}`);
+                    setIsSearchOpen(false);
+                  }}
+                  className="px-3 py-1 rounded-full bg-accent hover:bg-primary/20 transition-colors"
+                >
+                  {term}
+                </button>
+              ))}
             </div>
-            {/* Mobile Account Avatar Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <div className="ml-4 cursor-pointer">
-                  <Avatar className="w-12 h-12 border-2 border-primary shadow-lg">
-                    <AvatarImage 
-                      src={profilePicture} 
-                      alt={user?.username}
-                      onError={(e) => {
-                        console.error('Failed to load profile picture (mobile):', profilePicture);
-                        setProfilePicture('');
-                      }}
-                      onLoad={() => {
-                        console.log('Profile picture loaded successfully (mobile):', profilePicture);
-                      }}
-                      className="object-cover w-full h-full"
-                    />
-                    <AvatarFallback>
-                      {profilePicture ? (
-                        user?.username?.[0]?.toUpperCase() || <User className="w-5 h-5" />
-                      ) : selectedAvatar ? (
-                        <div className={`w-full h-full flex items-center justify-center ${defaultAvatars.find(av => av.id === selectedAvatar)?.color}`}>
-                          {defaultAvatars.find(av => av.id === selectedAvatar)?.emoji}
-                        </div>
-                      ) : (
-                        user?.username?.[0]?.toUpperCase() || <User className="w-5 h-5" />
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {user ? (
-                  <>
-                    <DropdownMenuItem disabled>Signed in as <b>{user.username}</b></DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {isAdmin && (
-                      <DropdownMenuItem asChild>
-                        <NavLink to="/admin" className="text-primary font-bold">Admin Panel</NavLink>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem asChild>
-                      <NavLink to="/profile">Profile</NavLink>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
-                  </>
+
+            {/* Live Search Results */}
+            {debouncedQuery.trim() && (
+              <div className="mt-8 bg-card rounded-xl border border-border shadow-lg p-4 overflow-hidden">
+                {searchLoading ? (
+                  <div className="flex justify-center p-4"><span className="text-muted-foreground">Searching...</span></div>
+                ) : searchResults && searchResults.length > 0 ? (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-muted-foreground px-2">Products</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {searchResults.map((product) => (
+                        <NavLink
+                          key={product.id}
+                          to={`/products/${product.id}`}
+                          onClick={() => setIsSearchOpen(false)}
+                          className="flex items-center gap-4 p-2 rounded-lg hover:bg-accent transition-colors"
+                        >
+                          <img src={product.image_url || '/placeholder.svg'} alt={product.name} className="w-16 h-16 rounded-md object-cover" onError={e => { e.currentTarget.src = '/placeholder.svg'; }} />
+                          <div>
+                            <p className="font-semibold text-foreground line-clamp-1">{product.name}</p>
+                            <p className="text-sm text-primary">{formatPrice(product.price)}</p>
+                          </div>
+                        </NavLink>
+                      ))}
+                    </div>
+                    <div className="pt-4 text-center border-t border-border">
+                      <button
+                        onClick={handleSearch}
+                        className="text-primary hover:underline text-sm font-semibold"
+                      >
+                        View all results for "{debouncedQuery}"
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <DropdownMenuItem asChild>
-                      <NavLink to="/login">Login</NavLink>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <NavLink to="/signup">Sign Up</NavLink>
-                    </DropdownMenuItem>
-                  </>
+                  <div className="text-center p-4 text-muted-foreground">
+                    No results found for "{debouncedQuery}"
+                  </div>
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </div>
+            )}
           </div>
         </div>
       )}
     </nav>
+    </>
   );
 };
 
